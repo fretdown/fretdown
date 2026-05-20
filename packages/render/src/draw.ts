@@ -30,6 +30,9 @@ const ROW_GAP = 16;
 const TRACK_GAP = 28;
 const LINE_HEIGHT_PER_STRING = 13;
 const TOP_PADDING = 40;
+// VexFlow's Stave reserves `space_above_staff_ln` (default 4) line-heights above the
+// first line, so a TabStave drawn at y renders its top string at y + 4 line-heights.
+const STAVE_TOP_OFFSET = 4 * LINE_HEIGHT_PER_STRING;
 
 const DURATION_CODE: Record<Duration['value'], string> = {
 	1: 'w',
@@ -179,7 +182,7 @@ export function computeLayout(score: Score, options: RenderOptions = {}): ScoreL
 				trackIndex,
 				measureIndex,
 				x: mp.x * scale,
-				y: mp.y * scale,
+				y: (mp.y + STAVE_TOP_OFFSET) * scale,
 				width: mp.width * scale,
 				height: height * scale,
 			});

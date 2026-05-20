@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { type Score, parse } from '@fretdown/core';
 import { describe, expect, it } from 'vitest';
-import { renderToSVG } from './index.js';
+import { computeLayout, renderToSVG } from './index.js';
 
 function scoreFrom(source: string): Score {
 	const { score } = parse(source);
@@ -93,5 +93,17 @@ describe('renderToSVG', () => {
 		// VexFlow labels tab slides "sl."
 		expect(svg).toContain('sl.');
 		expect(svg).not.toContain('/5');
+	});
+
+	it('computeLayout boxes line up with the rendered stave lines', () => {
+		const score = scoreFrom(SIMPLE_GUITAR);
+		const opts = { width: 600, measuresPerLine: 2 } as const;
+		const layout = computeLayout(score, opts);
+		const svg = renderToSVG(score, opts);
+		const firstLineY = Number(svg.match(/<path fill="none" d="M[\d.]+ ([\d.]+)/)?.[1]);
+		// the first measure box top should sit on the first (top) stave line, not above it
+		expect(layout.measures[0]?.y).toBeCloseTo(firstLineY, 0);
+		// six guitar strings → box spans five line gaps
+		expect(layout.measures[0]?.height).toBe(5 * 13);
 	});
 });
