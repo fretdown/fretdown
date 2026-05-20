@@ -95,6 +95,13 @@ describe('renderToSVG', () => {
 		expect(svg).not.toContain('/5');
 	});
 
+	it('labels each string with its open-note letter in the left gutter', () => {
+		const svg = renderToSVG(scoreFrom(SIMPLE_GUITAR), { width: 600 });
+		const labels = [...svg.matchAll(/<text[^>]*x="12"[^>]*>([A-G])<\/text>/g)].map((m) => m[1]);
+		// standard guitar tuning, top line (high E) down to bottom (low E)
+		expect(labels).toEqual(['E', 'B', 'G', 'D', 'A', 'E']);
+	});
+
 	it('computeLayout boxes line up with the rendered stave lines', () => {
 		const score = scoreFrom(SIMPLE_GUITAR);
 		const opts = { width: 600, measuresPerLine: 2 } as const;

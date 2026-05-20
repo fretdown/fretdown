@@ -35,8 +35,9 @@ renderInto(divElement, score, { width: 820 });
 | `measuresPerLine` | `4` | Measures per row. |
 | `scale` | `1` | Uniform scale factor. |
 
-Supports 4- and 6-line staves (from the tuning), durations and dots, chords, rests, time
-signatures, tempo/title headers, bends, and palm-mute annotations. Hammer/pull/slide
+Supports 4- and 6-line staves (from the tuning), per-string tuning labels in the left
+gutter, durations and dots, chords, rests, time signatures, tempo/title headers, bends, and
+palm-mute annotations. Hammer/pull/slide
 chains such as `s5f2h3` expand into real slurred noteheads (fret 2 → fret 3) joined by
 VexFlow `TabTie`/`TabSlide`, subdividing the beat; chains that can't subdivide evenly fall
 back to a single annotated note. See `DECISIONS.md` for the exact rule.

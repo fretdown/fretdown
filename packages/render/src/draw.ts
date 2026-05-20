@@ -33,6 +33,8 @@ const TOP_PADDING = 40;
 // VexFlow's Stave reserves `space_above_staff_ln` (default 4) line-heights above the
 // first line, so a TabStave drawn at y renders its top string at y + 4 line-heights.
 const STAVE_TOP_OFFSET = 4 * LINE_HEIGHT_PER_STRING;
+// Left gutter reserved for the per-string tuning labels at the start of each row.
+const TUNING_GUTTER = 18;
 
 const DURATION_CODE: Record<Duration['value'], string> = {
 	1: 'w',
@@ -113,14 +115,14 @@ function planLayout(score: Score, width: number, measuresPerLine: number): Layou
 		y += 18;
 
 		const measures: MeasurePlan[] = [];
-		const usable = width - 2 * MARGIN;
+		const usable = width - 2 * MARGIN - TUNING_GUTTER;
 		for (let i = 0; i < allMeasures.length; i += measuresPerLine) {
 			const row = allMeasures.slice(i, i + measuresPerLine);
 			const measureWidth = usable / row.length;
 			row.forEach((measure, j) => {
 				measures.push({
 					measure,
-					x: MARGIN + j * measureWidth,
+					x: MARGIN + TUNING_GUTTER + j * measureWidth,
 					y,
 					width: measureWidth,
 					isFirstInRow: j === 0,
@@ -220,6 +222,7 @@ function drawTrack(ctx: RenderContext, plan: TrackPlan): void {
 		if (mp.isFirstInRow) stave.addClef('tab');
 		if (mp.showMeta) stave.addTimeSignature(`${plan.numerator}/${plan.denominator}`);
 		stave.setContext(ctx).draw();
+		if (mp.isFirstInRow) drawTuningLabels(ctx, plan, mp);
 
 		const { tickables, tuplets, connections } = buildTickables(mp.measure);
 		if (tickables.length === 0) continue;
@@ -233,6 +236,24 @@ function drawTrack(ctx: RenderContext, plan: TrackPlan): void {
 		// Connections read note coordinates, so they're drawn after the voice is laid out.
 		for (const c of connections) drawConnection(ctx, c);
 	}
+}
+
+/**
+ * Draws the open-string note letter for each line in the row's left gutter, top line first
+ * (highest string). The tuning array is low→high, so line i reads `tuning[len - 1 - i]`.
+ */
+function drawTuningLabels(ctx: RenderContext, plan: TrackPlan, mp: MeasurePlan): void {
+	const { tuning } = plan.track;
+	ctx.save();
+	ctx.setFont('Arial', 9, '');
+	for (let i = 0; i < plan.numLines; i++) {
+		const pitch = tuning[tuning.length - 1 - i];
+		if (!pitch) continue;
+		const letter = pitch.replace(/[-\d]/g, '');
+		const y = mp.y + STAVE_TOP_OFFSET + i * LINE_HEIGHT_PER_STRING + 3;
+		ctx.fillText(letter, MARGIN, y);
+	}
+	ctx.restore();
 }
 
 /** A technique that visually joins two adjacent tab notes (hammer, pull, slide). */
