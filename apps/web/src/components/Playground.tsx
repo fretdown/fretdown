@@ -6,6 +6,7 @@ import { EXAMPLE_SOURCE } from '@/lib/example';
 import { FRETDOWN_LANGUAGE_ID, computeMarkers, registerFretdown } from '@/lib/fretdown-language';
 import { defaultProgram } from '@/lib/gm';
 import { TabPlayer, buildTimeline } from '@/lib/playback';
+import { SAMPLES } from '@/lib/samples';
 import { decodeSource, encodeSource } from '@/lib/share';
 import { parse, toMidi, toMusicXML } from '@fretdown/core';
 import Editor, { type Monaco, type OnMount } from '@monaco-editor/react';
@@ -128,6 +129,21 @@ export function Playground() {
 		}
 	};
 
+	const currentSample = SAMPLES.findIndex((s) => s.source === source);
+
+	const loadSample = (index: number) => {
+		const sample = SAMPLES[index];
+		if (!sample) return;
+		playerRef.current?.stop();
+		setPlaying(false);
+		setCursor(null);
+		setSelected('all');
+		setSource(sample.source);
+		refreshMarkers(sample.source);
+		// Drop any shared-link hash so this clearly reflects the chosen sample.
+		window.history.replaceState(null, '', window.location.pathname);
+	};
+
 	const handleExport = (format: 'midi' | 'musicxml') => {
 		const score = playablesScore();
 		if (!score) return;
@@ -157,9 +173,29 @@ export function Playground() {
 	return (
 		<div className="flex h-[calc(100vh-3.5rem)] flex-col">
 			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-				<span className="text-sm text-muted-foreground">
-					{notice ?? 'Edit Fretdown on the left; the tab renders live on the right.'}
-				</span>
+				<div className="flex items-center gap-2">
+					<label className="flex items-center gap-1.5 text-sm">
+						<span className="text-muted-foreground">Sample</span>
+						<select
+							aria-label="Load a sample"
+							className="rounded border border-border bg-background px-2 py-1 text-sm"
+							value={currentSample === -1 ? 'custom' : String(currentSample)}
+							onChange={(e) => {
+								if (e.target.value !== 'custom') loadSample(Number(e.target.value));
+							}}
+						>
+							{currentSample === -1 && <option value="custom">Custom…</option>}
+							{SAMPLES.map((s, i) => (
+								<option key={s.name} value={i}>
+									{s.name}
+								</option>
+							))}
+						</select>
+					</label>
+					<span className="hidden text-sm text-muted-foreground sm:inline">
+						{notice ?? 'Edit on the left; the tab renders live on the right.'}
+					</span>
+				</div>
 				<div className="flex items-center gap-2">
 					<Button size="sm" onClick={handlePlay}>
 						{playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
