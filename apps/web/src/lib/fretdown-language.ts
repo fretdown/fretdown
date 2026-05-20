@@ -14,6 +14,7 @@ const monarchTokens: IMonarchLanguage = {
 		root: [
 			[/#.*$/, 'comment'],
 			[/@[a-zA-Z][\w-]*/, 'keyword'],
+			[/^\s*[A-Za-z_][\w-]*(?=\s*:\s*$)/, 'type.identifier'],
 			[/"(?:\\.|[^"\\])*"/, 'string'],
 			[/\|:|:\||\|/, 'delimiter'],
 			[/s\d+(?:f\d+|x)(?:[hpbr/\\]\d+)*(?:\.[a-z]+)*/, 'variable'],

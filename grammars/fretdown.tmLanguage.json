@@ -1,0 +1,65 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Fretdown",
+	"scopeName": "source.fretdown",
+	"fileTypes": ["fd", "fretdown"],
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#directives" },
+		{ "include": "#strings" },
+		{ "include": "#section-label" },
+		{ "include": "#barlines" },
+		{ "include": "#note-atom" },
+		{ "include": "#rest" },
+		{ "include": "#duration" },
+		{ "include": "#pitch" },
+		{ "include": "#numbers" }
+	],
+	"repository": {
+		"comments": {
+			"match": "#.*$",
+			"name": "comment.line.number-sign.fretdown"
+		},
+		"directives": {
+			"match": "@[A-Za-z][\\w-]*",
+			"name": "keyword.control.directive.fretdown"
+		},
+		"strings": {
+			"name": "string.quoted.double.fretdown",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [{ "match": "\\\\.", "name": "constant.character.escape.fretdown" }]
+		},
+		"section-label": {
+			"match": "^\\s*([A-Za-z_][\\w-]*)\\s*(:)\\s*$",
+			"captures": {
+				"1": { "name": "entity.name.section.fretdown" },
+				"2": { "name": "punctuation.separator.section.fretdown" }
+			}
+		},
+		"barlines": {
+			"match": "\\|:|:\\||:\\|x\\d+|\\|",
+			"name": "keyword.operator.barline.fretdown"
+		},
+		"note-atom": {
+			"match": "s\\d+(?:f\\d+|x)(?:[hpbr/\\\\]\\d+)*(?:\\.[a-z]+)*",
+			"name": "variable.other.note.fretdown"
+		},
+		"rest": {
+			"match": "(?<![\\w.])_(?=[:\\s])",
+			"name": "constant.language.rest.fretdown"
+		},
+		"duration": {
+			"match": ":\\d+\\.?",
+			"name": "constant.numeric.duration.fretdown"
+		},
+		"pitch": {
+			"match": "\\b[A-G][#b]?-?\\d+\\b",
+			"name": "constant.other.pitch.fretdown"
+		},
+		"numbers": {
+			"match": "\\b\\d+(?:/\\d+)?\\b",
+			"name": "constant.numeric.fretdown"
+		}
+	}
+}

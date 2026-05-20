@@ -21,6 +21,14 @@ const FEATURES = [
 		title: 'Fretted-instrument-agnostic',
 		body: 'Guitar, bass, 7-string, ukulele. Strings and frets are abstract; instruments supply defaults.',
 	},
+	{
+		title: 'Exports to MIDI & MusicXML',
+		body: 'Turn a tab into a playable MIDI file or import it into notation software via MusicXML — deterministically, straight from the playground or the CLI.',
+	},
+	{
+		title: 'Renders real techniques',
+		body: 'Hammer-ons, pull-offs, and slides draw as slurred noteheads (not just text), with bends and palm mutes annotated.',
+	},
 ];
 
 export default function HomePage() {
