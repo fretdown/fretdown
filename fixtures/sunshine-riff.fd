@@ -1,0 +1,30 @@
+# Sunshine Riff — canonical Fretdown worked example
+@title "Sunshine Riff"
+@artist "Fretdown Demo"
+@tempo 120
+@time 4/4
+@key Em
+
+@arrange intro verse
+
+@track Guitar
+@instrument guitar
+@tuning E2 A2 D3 G3 B3 E4
+
+intro:
+  |: s6f0:8 s6f0 s5f2 s6f0 s4f2 s6f0 s5f2h3 s5f2 :|x2
+
+verse:
+  | (s4f2 s3f2 s2f2):4 _:4 s2f3.pm:8 s2f1:8 s1f0/3:4 |
+  | s3f5b7:4 s3f5:8 s3x:8 (s4f0 s3f0):2 |
+
+@track Bass
+@instrument bass
+@tuning E1 A1 D2 G2
+
+intro:
+  |: s4f0:8 s4f0 s4f0 s3f2 s4f0 s4f0 s3f2 s3f0 :|x2
+
+verse:
+  | s4f0:4 s4f0:8 s4f0:8 s3f2:4 s3f0:4 |
+  | s4f3:4 s4f3:8 s4f2:8 s4f0:2 |
