@@ -56,7 +56,7 @@ node packages/cli/dist/index.js render  fixtures/sunshine-riff.fd --out out.svg
 node packages/cli/dist/index.js export fixtures/sunshine-riff.fd --out song.mid
 node packages/cli/dist/index.js export fixtures/sunshine-riff.fd --out song.musicxml
 
-# run the playground (Monaco editor + live render + export buttons)
+# run the playground (Monaco editor, live render, MIDI playback + export)
 pnpm --filter web dev   # http://localhost:3000/play
 ```
 
