@@ -338,7 +338,7 @@ function tryExpandChain(
 	note: Note,
 	duration: Duration,
 ): { tickables: StemmableNote[]; connections: Connection[] } | null {
-	if (note.dead || duration.dotted || note.events.length === 0) return null;
+	if (note.dead || note.events.length === 0) return null;
 	if (!note.events.every((e) => e.connector in CONNECTOR_KIND)) return null;
 
 	const count = note.events.length + 1;
@@ -346,8 +346,9 @@ function tryExpandChain(
 	const subValue = duration.value * count;
 	if (!(subValue in DURATION_CODE)) return null; // would need a 64th note or smaller
 
+	// Splitting a duration into `count` equal parts keeps the dot: a dotted quarter → dotted 8ths.
 	const frets = [note.fret ?? 0, ...note.events.map((e) => e.fret)];
-	const subDuration: Duration = { value: subValue as Duration['value'], dotted: false };
+	const subDuration: Duration = { value: subValue as Duration['value'], dotted: duration.dotted };
 	const notes = frets.map(
 		(fret) =>
 			new TabNote({
@@ -355,6 +356,7 @@ function tryExpandChain(
 				duration: durationCode(subDuration),
 			}),
 	);
+	if (subDuration.dotted) Dot.buildAndAttach(notes, { all: true });
 	const head = notes[0];
 	if (head && note.articulations.length > 0) {
 		head.addModifier(new Annotation(note.articulations.join(' ')).setVerticalJustification(1), 0);

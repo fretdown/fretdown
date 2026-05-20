@@ -95,16 +95,25 @@ describe('renderToSVG', () => {
 		expect(svg).not.toContain('/5');
 	});
 
-	it('places technique annotations above the staff, not on the bottom string', () => {
-		// a dotted pull-off falls back to a "p14" annotation; it must sit above the top line
+	it('expands a dotted pull-off chain into slurred noteheads (not a label)', () => {
 		const svg = renderToSVG(
 			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f15p14:4. s2f3:8 |\n'),
-			{
-				width: 600,
-			},
+			{ width: 600 },
+		);
+		// fret 15 → 14 are two noteheads joined by a tie, with no fallback "p14" text
+		expect(svg.match(/vf-stavetie/g)?.length).toBe(1);
+		expect(svg).toContain('>14<');
+		expect(/<text[^>]*>p14<\/text>/.test(svg)).toBe(false);
+	});
+
+	it('still places a non-expandable technique label above the staff', () => {
+		// a bend ('b') isn't a transition connector, so it keeps a label — which must sit on top
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f15.pm:4. s2f3:8 |\n'),
+			{ width: 600 },
 		);
 		const annotationY = Number(
-			svg.match(/<text stroke="none" x="[\d.]+" y="([\d.]+)">p14<\/text>/)?.[1],
+			svg.match(/<text stroke="none" x="[\d.]+" y="([\d.]+)">pm<\/text>/)?.[1],
 		);
 		const topLineY = Number(svg.match(/<path fill="none" d="M[\d.]+ ([\d.]+)/)?.[1]);
 		expect(annotationY).toBeLessThan(topLineY);
