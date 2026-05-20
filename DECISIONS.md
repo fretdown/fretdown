@@ -78,6 +78,7 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **`serialize(score)` lives in core and always emits explicit durations** — canonical, carry-over-free output that round-trips; used by `convert_ir_to_fretdown`.
 - **Tool logic is pure functions in `tools.ts`; `server.ts` only wires MCP** — keeps the deterministic capabilities unit-testable without a transport, honoring "MCP does no reasoning."
 - **`parse_ascii_tab` is explicitly best-effort: rhythm approximated to eighth notes, tuning guessed from string count, techniques attached as connector events** — ASCII tab carries no reliable rhythm, so the tool returns a confidence score and ambiguity flags rather than pretending to be exact.
+- **The importer ignores ASCII barlines and chunks notes into bar-sized measures, padding the last with rests** — ASCII barline spacing rarely matches real measures, so trusting them produced measures that didn't fill the time signature (a validation error). Chunking by `eighthsPerBar` (8 for 4/4) always yields valid measures. It also trims each line to the first–last `|` so trailing annotations like `(6x)` aren't misread as notes.
 - **Server entry guards `main()` with an `argv[1] === import.meta.url` check** — so importing the module in tests doesn't start a stdio server.
 
 ## CLI

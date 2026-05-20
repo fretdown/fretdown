@@ -313,7 +313,10 @@ export function Playground() {
 							approximated and tuning is guessed, so review the result.
 						</p>
 						<textarea
-							className="mt-3 h-56 w-full resize-none rounded border border-border bg-background p-2 font-mono text-sm"
+							className="mt-3 h-56 w-full resize-none whitespace-pre rounded border border-border bg-background p-2 font-mono text-sm leading-snug"
+							style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}
+							wrap="off"
+							spellCheck={false}
 							placeholder={
 								'e|--0--3--5--3--0-----------|\nB|-----------------1--3--1--|\nG|--------------------------|\nD|--------------------------|\nA|--------------------------|\nE|--------------------------|'
 							}

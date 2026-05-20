@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseAsciiTab } from './ascii.js';
 import { parse } from './index.js';
+import { validate } from './validator.js';
 
 const GUITAR_TAB = `e|---0---3---|
 B|---1---1---|
@@ -58,6 +59,31 @@ describe('parseAsciiTab', () => {
 		expect(result.score).toBeNull();
 		expect(result.confidence).toBe(0);
 		expect(result.ambiguities).toContain('no-tab-block-found');
+	});
+
+	it('chunks a long, barline-free riff into bars that fill the measure', () => {
+		// No internal barlines and a trailing "(6x)" annotation — previously this overflowed the
+		// bar and leaked the "6" / "x" as notes.
+		const tab = `E|-----------------------------------------|
+B|-----------------------------------------|
+G|---3-5----3-6-5----3-5--3----------------| (6x)
+D|-5-3-5--5-3-6-5--5-3-5--3--5-------------|
+A|-5------5--------5---------5-------------|
+E|-----------------------------------------|`;
+		const result = parseAsciiTab(tab);
+		const reparsed = parse(result.fretdown!);
+		expect(reparsed.score).not.toBeNull();
+		// crucially, no measure-fill (or any) errors from the validator
+		const errors = [...reparsed.diagnostics, ...validate(reparsed.score!)].filter(
+			(d) => d.severity === 'error',
+		);
+		expect(errors).toEqual([]);
+		// the riff is chunked into whole bars (no stray fragment from the "(6x)" annotation)
+		const measures = result.score!.tracks[0]!.sections[0]!.items;
+		expect(measures.length).toBe(2);
+		// the final partial bar is padded with rests
+		const last = measures[measures.length - 1] as { beats: { kind: string }[] };
+		expect(last.beats.some((b) => b.kind === 'rest')).toBe(true);
 	});
 
 	it('captures hammer-ons as connector events', () => {

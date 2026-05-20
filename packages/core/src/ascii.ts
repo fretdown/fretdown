@@ -38,10 +38,13 @@ export function parseAsciiTab(text: string): AsciiResult {
 	if (!tuningInfo) ambiguities.push('unusual-string-count');
 	ambiguities.push('rhythm-approximated', 'tuning-guessed');
 
-	// Strip the leading label (everything up to and including the first '|').
+	// Keep only the bar-delimited region: from the first '|' to the last '|'. This drops the
+	// string label and any trailing annotation like "(6x)" that would be misread as notes.
 	const bodies = group.map((line) => {
-		const bar = line.indexOf('|');
-		return bar >= 0 ? line.slice(bar) : line;
+		const first = line.indexOf('|');
+		if (first < 0) return line;
+		const last = line.lastIndexOf('|');
+		return last > first ? line.slice(first, last + 1) : line.slice(first);
 	});
 
 	let hasConnectors = false;
@@ -53,7 +56,8 @@ export function parseAsciiTab(text: string): AsciiResult {
 	if (hasConnectors) ambiguities.push('techniques-approximated');
 
 	const barCols = barlineColumns(bodies);
-	const beats = assembleBeats(perString, barCols, stringCount);
+	// 4/4 default → 8 eighth notes per bar. Notes are chunked into bars of this size.
+	const beats = assembleBeats(perString, stringCount, 8);
 
 	const score: Score = {
 		metadata: { time: { numerator: 4, denominator: 4 }, capo: 0 },
@@ -135,8 +139,8 @@ function barlineColumns(bodies: string[]): number[] {
 
 function assembleBeats(
 	perString: LineToken[][],
-	barCols: number[],
 	stringCount: number,
+	eighthsPerBar: number,
 ): Score['tracks'][number]['sections'][number]['items'] {
 	// Attach connector tokens to the previous note on the same string; collect plain notes by column.
 	const noteByStringCol = new Map<string, Note>();
@@ -165,26 +169,29 @@ function assembleBeats(
 	});
 
 	const cols = [...colSet].sort((a, b) => a - b);
-	const segments = [0, ...barCols, Number.MAX_SAFE_INTEGER];
-	const items: ReturnType<typeof assembleBeats> = [];
+	const eighth = { value: 8 as const, dotted: false };
 
-	for (let s = 0; s < segments.length - 1; s++) {
-		const lo = segments[s] as number;
-		const hi = segments[s + 1] as number;
-		const measureCols = cols.filter((c) => c > lo && c < hi);
-		if (measureCols.length === 0) continue;
-		const beats: Beat[] = measureCols.map((c) => {
-			const notes: Note[] = [];
-			for (let str = 1; str <= stringCount; str++) {
-				const n = noteByStringCol.get(`${c}:${str}`);
-				if (n) notes.push(n);
-			}
-			const duration = { value: 8 as const, dotted: false };
-			if (notes.length === 1) {
-				return { kind: 'note', note: notes[0] as Note, duration, location: zero() };
-			}
-			return { kind: 'chord', notes, duration, location: zero() };
-		});
+	// One eighth-note beat per column (a chord when several strings line up on that column).
+	const allBeats: Beat[] = cols.map((c) => {
+		const notes: Note[] = [];
+		for (let str = 1; str <= stringCount; str++) {
+			const n = noteByStringCol.get(`${c}:${str}`);
+			if (n) notes.push(n);
+		}
+		if (notes.length === 1) {
+			return { kind: 'note', note: notes[0] as Note, duration: eighth, location: zero() };
+		}
+		return { kind: 'chord', notes, duration: eighth, location: zero() };
+	});
+
+	// ASCII tab carries no reliable rhythm or measure grouping, so chunk the notes into
+	// bar-sized measures and pad the final partial bar with rests — every measure fills 4/4.
+	const items: ReturnType<typeof assembleBeats> = [];
+	for (let i = 0; i < allBeats.length; i += eighthsPerBar) {
+		const beats = allBeats.slice(i, i + eighthsPerBar);
+		while (beats.length < eighthsPerBar) {
+			beats.push({ kind: 'rest', duration: eighth, location: zero() });
+		}
 		items.push({ beats, location: zero() });
 	}
 	return items;
