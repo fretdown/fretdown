@@ -1,5 +1,6 @@
 import type { Beat, Duration, Measure, Note, Score, Track } from './ir.js';
 import { parsePitch } from './pitch.js';
+import { noteToMidi } from './tuning.js';
 
 /** Divisions per quarter note. 24 = LCM(8, 3): exact for 32nd notes and eighth triplets. */
 const DIVISIONS = 24;
@@ -198,7 +199,7 @@ function noteXml(
 	scale: number,
 	opts: NoteOpts,
 ): string[] {
-	const midi = noteMidi(track, note);
+	const midi = noteToMidi(track, note);
 	const dur = durationDivs(duration, scale);
 	const lines = ['      <note>'];
 	if (opts.chord) lines.push('        <chord/>');
@@ -240,15 +241,6 @@ function noteXml(
 
 	lines.push('      </note>');
 	return lines;
-}
-
-function noteMidi(track: Track, note: Note): number | null {
-	const idx = track.tuning.length - note.string;
-	const open = track.tuning[idx];
-	if (open === undefined) return null;
-	const parsed = parsePitch(open);
-	if (!parsed) return null;
-	return parsed.midi + (note.fret ?? 0) + track.capo;
 }
 
 function durationDivs(duration: Duration, scale: number): number {

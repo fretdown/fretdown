@@ -10,6 +10,7 @@ export { INSTRUMENTS, getInstrument, DEFAULT_FRETS } from './instruments.js';
 export type { InstrumentDef } from './instruments.js';
 export { parsePitch, isValidPitch } from './pitch.js';
 export type { ParsedPitch } from './pitch.js';
+export { noteToMidi } from './tuning.js';
 export { validate, beatDuration } from './validator.js';
 export { serialize } from './serialize.js';
 export { parseAsciiTab } from './ascii.js';

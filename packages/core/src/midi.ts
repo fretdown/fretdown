@@ -1,5 +1,5 @@
 import type { Beat, Duration, Note, Score, Track } from './ir.js';
-import { parsePitch } from './pitch.js';
+import { noteToMidi } from './tuning.js';
 
 /** Pulses per quarter note. 480 keeps every supported duration (incl. triplets) integral. */
 const PPQ = 480;
@@ -89,7 +89,7 @@ function emitBeat(
 
 	if (beat.kind === 'chord') {
 		const pitches = beat.notes
-			.map((n) => noteMidi(track, n))
+			.map((n) => noteToMidi(track, n))
 			.filter((m): m is number => m !== null);
 		for (const m of pitches) noteOn(cursor, m);
 		for (const m of pitches) noteOff(cursor + total, m);
@@ -112,7 +112,7 @@ function emitBeat(
 /** The sequence of MIDI pitches a single note plays: its fret, then any transition targets. */
 function chainPitches(track: Track, note: Note): number[] {
 	if (note.dead) return [];
-	const base = noteMidi(track, note);
+	const base = noteToMidi(track, note);
 	if (base === null) return [];
 	const open = base - (note.fret ?? 0);
 	const pitches = [base];
@@ -120,16 +120,6 @@ function chainPitches(track: Track, note: Note): number[] {
 		if (TRANSITION_CONNECTORS.has(event.connector)) pitches.push(open + event.fret);
 	}
 	return pitches;
-}
-
-function noteMidi(track: Track, note: Note): number | null {
-	const idx = track.tuning.length - note.string;
-	const open = track.tuning[idx];
-	if (open === undefined) return null;
-	const parsed = parsePitch(open);
-	if (!parsed) return null;
-	// A capo raises the sounding pitch; tab fret numbers stay relative to the capo.
-	return parsed.midi + (note.fret ?? 0) + track.capo;
 }
 
 function ticksOf(duration: Duration, scale: number): number {

@@ -142,6 +142,57 @@ function planLayout(score: Score, width: number, measuresPerLine: number): Layou
 	return { tracks, totalHeight: y + MARGIN };
 }
 
+/** A rendered measure's bounding box, in the SVG's coordinate space. */
+export interface MeasureBox {
+	/** Index of the track in `score.tracks`. */
+	trackIndex: number;
+	/** Index of the measure within its track. */
+	measureIndex: number;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+export interface ScoreLayout {
+	width: number;
+	height: number;
+	measures: MeasureBox[];
+}
+
+/**
+ * Computes the same measure layout {@link renderInto} draws, without rendering — so a host
+ * (e.g. a playback cursor) can position overlays that line up with the produced SVG. Uses
+ * identical defaults to {@link renderInto}; pass the same options you render with.
+ */
+export function computeLayout(score: Score, options: RenderOptions = {}): ScoreLayout {
+	const width = options.width ?? 900;
+	const measuresPerLine = Math.max(1, options.measuresPerLine ?? 4);
+	const scale = options.scale ?? 1;
+	const layout = planLayout(score, width, measuresPerLine);
+
+	const measures: MeasureBox[] = [];
+	layout.tracks.forEach((tp, trackIndex) => {
+		const height = (tp.numLines - 1) * LINE_HEIGHT_PER_STRING;
+		tp.measures.forEach((mp, measureIndex) => {
+			measures.push({
+				trackIndex,
+				measureIndex,
+				x: mp.x * scale,
+				y: mp.y * scale,
+				width: mp.width * scale,
+				height: height * scale,
+			});
+		});
+	});
+
+	return {
+		width: Math.ceil(width * scale),
+		height: Math.ceil(layout.totalHeight * scale),
+		measures,
+	};
+}
+
 function drawHeader(ctx: RenderContext, score: Score, width: number): void {
 	const title = score.metadata.title ?? 'Untitled';
 	ctx.save();
