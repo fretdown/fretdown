@@ -79,11 +79,19 @@ E|-----------------------------------------|`;
 		);
 		expect(errors).toEqual([]);
 		// the riff is chunked into whole bars (no stray fragment from the "(6x)" annotation)
-		const measures = result.score!.tracks[0]!.sections[0]!.items;
+		const measures = result.score!.tracks[0]!.sections[0]!.items as Array<{
+			beats: { kind: string }[];
+			repeatStart?: boolean;
+			repeatEnd?: { times: number };
+		}>;
 		expect(measures.length).toBe(2);
 		// the final partial bar is padded with rests
-		const last = measures[measures.length - 1] as { beats: { kind: string }[] };
-		expect(last.beats.some((b) => b.kind === 'rest')).toBe(true);
+		expect(measures[1]!.beats.some((b) => b.kind === 'rest')).toBe(true);
+		// "(6x)" is captured as a repeat spanning the riff, not dropped
+		expect(measures[0]!.repeatStart).toBe(true);
+		expect(measures[1]!.repeatEnd).toEqual({ times: 6 });
+		expect(result.fretdown).toContain(':|x6');
+		expect(result.ambiguities).toContain('repeat-detected');
 	});
 
 	it('captures hammer-ons as connector events', () => {

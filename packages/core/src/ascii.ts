@@ -59,6 +59,16 @@ export function parseAsciiTab(text: string): AsciiResult {
 	// 4/4 default → 8 eighth notes per bar. Notes are chunked into bars of this size.
 	const beats = assembleBeats(perString, stringCount, 8);
 
+	// A trailing "(6x)" / "x6" annotation means the riff repeats — wrap it in a repeat.
+	const repeatTimes = detectRepeat(group);
+	if (repeatTimes && beats.length > 0) {
+		const first = beats[0] as { repeatStart?: boolean };
+		const last = beats[beats.length - 1] as { repeatEnd?: { times: number } };
+		first.repeatStart = true;
+		last.repeatEnd = { times: repeatTimes };
+		ambiguities.push('repeat-detected');
+	}
+
 	const score: Score = {
 		metadata: { time: { numerator: 4, denominator: 4 }, capo: 0 },
 		tracks: [
@@ -126,6 +136,22 @@ function tokenizeLine(body: string): LineToken[] {
 		}
 	}
 	return tokens;
+}
+
+/** Detects a repeat count from a trailing annotation like "(6x)" or "x6" after the bar. */
+function detectRepeat(lines: string[]): number | null {
+	for (const line of lines) {
+		const first = line.indexOf('|');
+		const last = line.lastIndexOf('|');
+		if (last <= first) continue; // only text after a genuine closing barline
+		const trailing = line.slice(last + 1);
+		const m = trailing.match(/(\d+)\s*x/i) ?? trailing.match(/x\s*(\d+)/i);
+		if (m) {
+			const n = Number(m[1]);
+			if (n >= 2 && n <= 99) return n;
+		}
+	}
+	return null;
 }
 
 function barlineColumns(bodies: string[]): number[] {
