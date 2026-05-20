@@ -65,8 +65,33 @@ describe('renderToSVG', () => {
 		const svg = renderToSVG(scoreFrom(src), { measuresPerLine: 2 });
 		expect(svg).toContain('Guitar');
 		expect(svg).toContain('Bass');
-		// hammer-on annotation and palm-mute label from the guitar verse
-		expect(svg).toContain('h3');
+		// the s5f2h3 hammer-on now draws a real tie (not an "h3" text annotation)
+		expect(svg).toContain('vf-stavetie');
+		// palm-mute label from the guitar verse stays an annotation
 		expect(svg).toContain('pm');
+	});
+
+	it('expands a hammer chain into slurred noteheads', () => {
+		// 3 events → 4 noteheads (a power-of-two chain), so a quarter subdivides into 16ths.
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5h7h9p7:4 s3f5:2 |\n'),
+			{ width: 600 },
+		);
+		// frets 5 → 7 → 9 → 7 are four separate noteheads joined by three ties.
+		expect(svg.match(/vf-stavetie/g)?.length).toBe(3);
+		expect(svg).toContain('>9<');
+		// no fallback text annotation for the chain.
+		expect(svg).not.toContain('h7');
+		expect(svg).not.toContain('p7');
+	});
+
+	it('draws a slide line for slide connectors', () => {
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f3/5:2 s2f5:2 |\n'),
+			{ width: 600 },
+		);
+		// VexFlow labels tab slides "sl."
+		expect(svg).toContain('sl.');
+		expect(svg).not.toContain('/5');
 	});
 });

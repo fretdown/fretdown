@@ -9,7 +9,9 @@ import {
 	Renderer,
 	type StemmableNote,
 	TabNote,
+	TabSlide,
 	TabStave,
+	TabTie,
 	Tuplet,
 	Voice,
 } from 'vexflow';
@@ -165,7 +167,7 @@ function drawTrack(ctx: RenderContext, plan: TrackPlan): void {
 		if (mp.showMeta) stave.addTimeSignature(`${plan.numerator}/${plan.denominator}`);
 		stave.setContext(ctx).draw();
 
-		const { tickables, tuplets } = buildTickables(mp.measure);
+		const { tickables, tuplets, connections } = buildTickables(mp.measure);
 		if (tickables.length === 0) continue;
 
 		const voice = new Voice({ num_beats: plan.numerator, beat_value: plan.denominator })
@@ -174,24 +176,115 @@ function drawTrack(ctx: RenderContext, plan: TrackPlan): void {
 		new Formatter().joinVoices([voice]).format([voice], mp.width - 24);
 		voice.draw(ctx, stave);
 		for (const tuplet of tuplets) tuplet.setContext(ctx).draw();
+		// Connections read note coordinates, so they're drawn after the voice is laid out.
+		for (const c of connections) drawConnection(ctx, c);
 	}
 }
 
-function buildTickables(measure: Measure): { tickables: StemmableNote[]; tuplets: Tuplet[] } {
+/** A technique that visually joins two adjacent tab notes (hammer, pull, slide). */
+interface Connection {
+	kind: 'hammer' | 'pull' | 'slide-up' | 'slide-down';
+	first: TabNote;
+	last: TabNote;
+}
+
+function drawConnection(ctx: RenderContext, c: Connection): void {
+	const notes = { first_note: c.first, last_note: c.last };
+	const tie =
+		c.kind === 'hammer'
+			? TabTie.createHammeron(notes)
+			: c.kind === 'pull'
+				? TabTie.createPulloff(notes)
+				: c.kind === 'slide-up'
+					? TabSlide.createSlideUp(notes)
+					: TabSlide.createSlideDown(notes);
+	tie.setContext(ctx).draw();
+}
+
+function buildTickables(measure: Measure): {
+	tickables: StemmableNote[];
+	tuplets: Tuplet[];
+	connections: Connection[];
+} {
 	const tickables: StemmableNote[] = [];
 	const tuplets: Tuplet[] = [];
+	const connections: Connection[] = [];
 	for (const beat of measure.beats) {
 		if (beat.kind === 'tuplet') {
+			// Chains aren't expanded inside tuplets — it would skew the tuplet's note count.
 			const inner = beat.beats.map((b) => beatToTickable(b));
 			tickables.push(...inner);
 			tuplets.push(
 				new Tuplet(inner, { num_notes: beat.n, notes_occupied: powerOfTwoBelow(beat.n) }),
 			);
 		} else {
-			tickables.push(beatToTickable(beat));
+			const expanded = expandBeat(beat);
+			tickables.push(...expanded.tickables);
+			connections.push(...expanded.connections);
 		}
 	}
-	return { tickables, tuplets };
+	return { tickables, tuplets, connections };
+}
+
+const CONNECTOR_KIND: Record<string, Connection['kind']> = {
+	h: 'hammer',
+	p: 'pull',
+	'/': 'slide-up',
+	'\\': 'slide-down',
+};
+
+/**
+ * Expands a beat into the tickables (and joining connections) it draws as. A connector
+ * chain like `s5f2h3` becomes two slurred noteheads (fret 2 → fret 3) sharing the beat's
+ * duration; anything that doesn't qualify falls back to a single annotated note.
+ */
+function expandBeat(beat: Beat): { tickables: StemmableNote[]; connections: Connection[] } {
+	if (beat.kind === 'note') {
+		const chain = tryExpandChain(beat.note, beat.duration);
+		if (chain) return chain;
+	}
+	return { tickables: [beatToTickable(beat)], connections: [] };
+}
+
+/**
+ * Builds a hammer/pull/slide chain, or returns null when it can't be drawn faithfully:
+ * a dead/dotted note, a non-transition connector (bend/release), or a beat that can't
+ * subdivide evenly into the chain's length using a real note value (≤ 32nd).
+ */
+function tryExpandChain(
+	note: Note,
+	duration: Duration,
+): { tickables: StemmableNote[]; connections: Connection[] } | null {
+	if (note.dead || duration.dotted || note.events.length === 0) return null;
+	if (!note.events.every((e) => e.connector in CONNECTOR_KIND)) return null;
+
+	const count = note.events.length + 1;
+	if ((count & (count - 1)) !== 0) return null; // chain length must be a power of two
+	const subValue = duration.value * count;
+	if (!(subValue in DURATION_CODE)) return null; // would need a 64th note or smaller
+
+	const frets = [note.fret ?? 0, ...note.events.map((e) => e.fret)];
+	const subDuration: Duration = { value: subValue as Duration['value'], dotted: false };
+	const notes = frets.map(
+		(fret) =>
+			new TabNote({
+				positions: [{ str: note.string, fret: String(fret) }],
+				duration: durationCode(subDuration),
+			}),
+	);
+	const head = notes[0];
+	if (head && note.articulations.length > 0) {
+		head.addModifier(new Annotation(note.articulations.join(' ')).setVerticalJustification(3), 0);
+	}
+
+	const connections: Connection[] = [];
+	note.events.forEach((event, i) => {
+		const kind = CONNECTOR_KIND[event.connector];
+		const first = notes[i];
+		const last = notes[i + 1];
+		if (kind && first && last) connections.push({ kind, first, last });
+	});
+	return { tickables: notes as unknown as StemmableNote[], connections };
 }
 
 function beatToTickable(beat: Beat): StemmableNote {

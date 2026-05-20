@@ -5,6 +5,8 @@ import {
 	parseAsciiTab,
 	scoreSchema,
 	serialize,
+	toMidi,
+	toMusicXML,
 	validate,
 } from '@fretdown/core';
 import { renderToSVG } from '@fretdown/render';
@@ -50,4 +52,24 @@ export function convertIrToFretdown(ir: unknown): ConvertResult {
 
 export function importAsciiTab(text: string): AsciiResult {
 	return parseAsciiTab(text);
+}
+
+export interface ExportResult {
+	/** MusicXML text, or base64-encoded bytes for MIDI. */
+	data: string | null;
+	encoding: 'utf8' | 'base64';
+	diagnostics: Diagnostic[];
+}
+
+export function exportFretdown(source: string, format: 'midi' | 'musicxml'): ExportResult {
+	const { score, diagnostics } = parse(source);
+	if (!score) return { data: null, encoding: 'utf8', diagnostics };
+	if (format === 'midi') {
+		return {
+			data: Buffer.from(toMidi(score)).toString('base64'),
+			encoding: 'base64',
+			diagnostics,
+		};
+	}
+	return { data: toMusicXML(score), encoding: 'utf8', diagnostics };
 }

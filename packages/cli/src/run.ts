@@ -1,4 +1,11 @@
-import { type Diagnostic, parse, parseAsciiTab, validate } from '@fretdown/core';
+import {
+	type Diagnostic,
+	parse,
+	parseAsciiTab,
+	toMidi,
+	toMusicXML,
+	validate,
+} from '@fretdown/core';
 import { renderToSVG } from '@fretdown/render';
 import pc from 'picocolors';
 
@@ -54,6 +61,27 @@ export function runRender(source: string, filename: string): RenderOutcome {
 		return { svg: null, report: { output: lines.join('\n'), code: 1 } };
 	}
 	return { svg: renderToSVG(score), report: { output: '', code: 0 } };
+}
+
+export type ExportFormat = 'midi' | 'musicxml';
+
+export interface ExportOutcome {
+	/** Bytes (MIDI) or text (MusicXML) to write, or null when the file couldn't be parsed. */
+	data: Uint8Array | string | null;
+	report: CommandResult;
+}
+
+/** Exports source to MIDI or MusicXML, returning the payload and a diagnostic report. */
+export function runExport(source: string, filename: string, format: ExportFormat): ExportOutcome {
+	const { score, diagnostics } = parse(source);
+	const errors = diagnostics.filter((d) => d.severity === 'error');
+	if (!score || errors.length > 0) {
+		const lines = [pc.red(`✗ cannot export ${filename}`)];
+		for (const d of errors) lines.push(formatDiagnostic(filename, d));
+		return { data: null, report: { output: lines.join('\n'), code: 1 } };
+	}
+	const data = format === 'midi' ? toMidi(score) : toMusicXML(score);
+	return { data, report: { output: '', code: 0 } };
 }
 
 /** Best-effort ASCII-tab → Fretdown conversion, emitting a stub with TODO markers. */

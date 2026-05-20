@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
 	convertIrToFretdown,
+	exportFretdown,
 	importAsciiTab,
 	renderFretdownToSvg,
 	validateFretdown,
@@ -53,6 +54,19 @@ export function createServer(): McpServer {
 			inputSchema: { text: z.string().describe('Legacy ASCII tablature') },
 		},
 		async ({ text }) => json(importAsciiTab(text)),
+	);
+
+	server.registerTool(
+		'export_fretdown',
+		{
+			description:
+				'Export Fretdown source to MIDI or MusicXML. MusicXML is returned as UTF-8 text; MIDI is returned base64-encoded (see the `encoding` field). Deterministic.',
+			inputSchema: {
+				source: z.string().describe('Fretdown (.fd) source text'),
+				format: z.enum(['midi', 'musicxml']).describe('Output format'),
+			},
+		},
+		async ({ source, format }) => json(exportFretdown(source, format)),
 	);
 
 	return server;

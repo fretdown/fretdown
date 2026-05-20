@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runConvert, runRender, runValidate } from './run.js';
+import { runConvert, runExport, runRender, runValidate } from './run.js';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI for assertions
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -64,5 +64,28 @@ E|-3-------3-|`;
 	it('reports failure when no tab block is found', () => {
 		const r = runConvert('not a tab', 'tab.txt');
 		expect(r.code).toBe(1);
+	});
+});
+
+describe('runExport', () => {
+	it('exports MIDI as bytes starting with the SMF header', () => {
+		const r = runExport(VALID, 'a.fd', 'midi');
+		expect(r.report.code).toBe(0);
+		expect(r.data).toBeInstanceOf(Uint8Array);
+		const head = String.fromCharCode(...(r.data as Uint8Array).slice(0, 4));
+		expect(head).toBe('MThd');
+	});
+
+	it('exports MusicXML as a partwise document string', () => {
+		const r = runExport(VALID, 'a.fd', 'musicxml');
+		expect(r.report.code).toBe(0);
+		expect(typeof r.data).toBe('string');
+		expect(r.data as string).toContain('<score-partwise');
+	});
+
+	it('reports an error and no data for unparseable input', () => {
+		const r = runExport('@track G\n@tuning E2 A2 D3 G3 B3 E4\na:\n  | (s6f0 |\n', 'a.fd', 'midi');
+		expect(r.data).toBeNull();
+		expect(r.report.code).toBe(1);
 	});
 });

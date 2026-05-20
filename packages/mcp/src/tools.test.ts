@@ -1,6 +1,11 @@
 import { parse } from '@fretdown/core';
 import { describe, expect, it } from 'vitest';
-import { convertIrToFretdown, renderFretdownToSvg, validateFretdown } from './tools.js';
+import {
+	convertIrToFretdown,
+	exportFretdown,
+	renderFretdownToSvg,
+	validateFretdown,
+} from './tools.js';
 
 const VALID = `@track G
 @tuning E2 A2 D3 G3 B3 E4
@@ -44,5 +49,23 @@ describe('convertIrToFretdown', () => {
 		const result = convertIrToFretdown({ not: 'a score' });
 		expect(result.fretdown).toBeNull();
 		expect(result.error).toBeTruthy();
+	});
+});
+
+describe('exportFretdown', () => {
+	it('exports MIDI as base64 bytes', () => {
+		const result = exportFretdown(VALID, 'midi');
+		expect(result.encoding).toBe('base64');
+		expect(result.data).toBeTruthy();
+		const head = Buffer.from(result.data as string, 'base64')
+			.subarray(0, 4)
+			.toString('ascii');
+		expect(head).toBe('MThd');
+	});
+
+	it('exports MusicXML as UTF-8 text', () => {
+		const result = exportFretdown(VALID, 'musicxml');
+		expect(result.encoding).toBe('utf8');
+		expect(result.data).toContain('<score-partwise');
 	});
 });
