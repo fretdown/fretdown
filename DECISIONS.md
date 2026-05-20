@@ -50,3 +50,10 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **`@fretdown/render/browser` subpath import in the web app** — the playground renders client-side with VexFlow against the real DOM, never bundling jsdom.
 - **Share links base64url-encode the source into the location hash** — no backend needed; round-trips UTF-8 safely.
 - **Monaco loaded via `next/dynamic` with `ssr: false`** — the editor is browser-only; the `/play` route ships a tiny shell and lazy-loads the editor.
+
+## MCP
+
+- **`serialize(score)` lives in core and always emits explicit durations** — canonical, carry-over-free output that round-trips; used by `convert_ir_to_fretdown`.
+- **Tool logic is pure functions in `tools.ts`; `server.ts` only wires MCP** — keeps the deterministic capabilities unit-testable without a transport, honoring "MCP does no reasoning."
+- **`parse_ascii_tab` is explicitly best-effort: rhythm approximated to eighth notes, tuning guessed from string count, techniques attached as connector events** — ASCII tab carries no reliable rhythm, so the tool returns a confidence score and ambiguity flags rather than pretending to be exact.
+- **Server entry guards `main()` with an `argv[1] === import.meta.url` check** — so importing the module in tests doesn't start a stdio server.
