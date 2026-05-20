@@ -8,3 +8,6 @@ Expand more hammer/pull/slide chains into real noteheads instead of text labels:
   (dotted-eighth) noteheads. Splitting a dotted duration into equal parts keeps the dot.
 - **Odd chain lengths** — a chain like `s4f7/9\7` (length 3) is drawn as a tuplet (3 in the
   space of 2) with the slide lines, rather than falling back to a `/9\7` label.
+- **Mixed bend + transition chains** — in `s3f9b11b11r9p7`, the bends/releases draw as Bend
+  arrows on the notehead and the trailing pull-off becomes a real tie to fret 7, instead of
+  leaving a `p7` text label. Bends/releases decorate a notehead; only transitions add one.

@@ -85,6 +85,17 @@ describe('renderToSVG', () => {
 		expect(svg).not.toContain('p7');
 	});
 
+	it('draws bends/releases as arrows on the notehead and the trailing pull as a tie', () => {
+		// s3f9 bent (and released), then a pull-off to 7 — the pull must be a tie, not a "p7" label
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f9b11b11r9p7:4 s3f7:2 s3f7:4 |\n'),
+			{ width: 600 },
+		);
+		expect(/<text[^>]*>p7<\/text>/.test(svg)).toBe(false);
+		expect(svg.match(/vf-stavetie/g)?.length).toBe(1); // the pull-off
+		expect(/Full|½/.test(svg)).toBe(true); // bend arrows still drawn
+	});
+
 	it('expands an odd-length chain (drawn as a tuplet) instead of a text label', () => {
 		// s4f7/9\7 has 2 events → length 3 (not a power of two): a tuplet, not a label
 		const svg = renderToSVG(

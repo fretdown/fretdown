@@ -1,4 +1,4 @@
-import type { Beat, Duration, Measure, Note, Score, Track } from '@fretdown/core';
+import type { Beat, Duration, FretEvent, Measure, Note, Score, Track } from '@fretdown/core';
 import {
 	Annotation,
 	Bend,
@@ -310,12 +310,15 @@ function buildTickables(measure: Measure): {
 	return { tickables, tuplets, connections };
 }
 
-const CONNECTOR_KIND: Record<string, Connection['kind']> = {
-	h: 'hammer',
-	p: 'pull',
-	'/': 'slide-up',
-	'\\': 'slide-down',
-};
+// Connectors that move to a new fret (a new notehead); bends/releases instead decorate the
+// current notehead.
+const TRANSITION_CONNECTORS = new Set(['h', 'p', '/', '\\']);
+
+/** A notehead in a chain: a fret plus any bend/release events decorating it. */
+interface ChainSegment {
+	fret: number;
+	bends: FretEvent[];
+}
 
 /**
  * Expands a beat into the tickables (and joining connections) it draws as. A connector
@@ -335,19 +338,32 @@ function expandBeat(beat: Beat): {
 }
 
 /**
- * Builds a hammer/pull/slide chain, or returns null when it can't be drawn faithfully:
- * a dead note, a non-transition connector (bend/release), or a beat that can't subdivide
- * into a real note value (≤ 32nd). A power-of-two chain subdivides evenly; an odd length
- * (e.g. 3) is drawn as a tuplet (3 notes in the space of 2).
+ * Builds a chain of noteheads from a note's connectors: transitions (hammer/pull/slide)
+ * each start a new notehead, while bends/releases decorate the current one. Returns null
+ * when there's no transition (a plain or bend-only note — `decorate` handles those), the
+ * note is dead, or the beat can't subdivide into a real note value (≤ 32nd). Power-of-two
+ * chains subdivide evenly; an odd length (e.g. 3) is drawn as a tuplet (3 in the space of 2).
  */
 function tryExpandChain(
 	note: Note,
 	duration: Duration,
 ): { tickables: StemmableNote[]; connections: Connection[]; tuplets: Tuplet[] } | null {
-	if (note.dead || note.events.length === 0) return null;
-	if (!note.events.every((e) => e.connector in CONNECTOR_KIND)) return null;
+	if (note.dead) return null;
 
-	const count = note.events.length + 1;
+	const segments: ChainSegment[] = [{ fret: note.fret ?? 0, bends: [] }];
+	const connectors: FretEvent['connector'][] = [];
+	for (const event of note.events) {
+		if (TRANSITION_CONNECTORS.has(event.connector)) {
+			connectors.push(event.connector);
+			segments.push({ fret: event.fret, bends: [] });
+		} else {
+			(segments[segments.length - 1] as ChainSegment).bends.push(event);
+		}
+	}
+
+	const count = segments.length;
+	if (count < 2) return null; // no transition → let decorate() draw the (possibly bent) note
+
 	const isPow2 = (count & (count - 1)) === 0;
 	// Power-of-two chains tile the beat exactly; others are a tuplet of `count` in `occupied`.
 	const occupied = isPow2 ? count : powerOfTwoBelow(count);
@@ -355,42 +371,57 @@ function tryExpandChain(
 	const subValue = duration.value * occupied;
 	if (!(subValue in DURATION_CODE)) return null; // would need a 64th note or smaller
 
-	const frets = [note.fret ?? 0, ...note.events.map((e) => e.fret)];
 	const subDuration: Duration = {
 		value: subValue as Duration['value'],
 		dotted: isPow2 && duration.dotted,
 	};
-	const notes = frets.map(
-		(fret) =>
+	const notes = segments.map(
+		(seg) =>
 			new TabNote({
-				positions: [{ str: note.string, fret: String(fret) }],
+				positions: [{ str: note.string, fret: String(seg.fret) }],
 				duration: durationCode(subDuration),
 			}),
 	);
 	if (subDuration.dotted) Dot.buildAndAttach(notes, { all: true });
+
+	// Draw each notehead's bends as Bend arrows (a bend immediately released folds into one).
+	segments.forEach((seg, idx) => {
+		const tabNote = notes[idx];
+		if (!tabNote) return;
+		for (let i = 0; i < seg.bends.length; i++) {
+			const event = seg.bends[i];
+			if (!event) continue;
+			if (event.connector === 'b') {
+				const release = seg.bends[i + 1]?.connector === 'r';
+				tabNote.addModifier(new Bend(bendText(event.fret - seg.fret), release), 0);
+				if (release) i++;
+			} else {
+				tabNote.addModifier(new Annotation('rel').setVerticalJustification(1), 0);
+			}
+		}
+	});
+
 	const head = notes[0];
 	if (head && note.articulations.length > 0) {
 		head.addModifier(new Annotation(note.articulations.join(' ')).setVerticalJustification(1), 0);
 	}
 
 	const connections: Connection[] = [];
-	note.events.forEach((event, i) => {
-		const from = frets[i] as number;
-		const to = frets[i + 1] as number;
+	connectors.forEach((connector, i) => {
+		const from = (segments[i] as ChainSegment).fret;
+		const to = (segments[i + 1] as ChainSegment).fret;
 		// Slide direction follows the actual fret movement, not just the '/' vs '\' symbol.
-		const kind: Connection['kind'] | undefined =
-			event.connector === 'h'
+		const kind: Connection['kind'] =
+			connector === 'h'
 				? 'hammer'
-				: event.connector === 'p'
+				: connector === 'p'
 					? 'pull'
-					: event.connector === '/' || event.connector === '\\'
-						? to >= from
-							? 'slide-up'
-							: 'slide-down'
-						: undefined;
+					: to >= from
+						? 'slide-up'
+						: 'slide-down';
 		const first = notes[i];
 		const last = notes[i + 1];
-		if (kind && first && last) connections.push({ kind, first, last });
+		if (first && last) connections.push({ kind, first, last });
 	});
 
 	const tickables = notes as unknown as StemmableNote[];
