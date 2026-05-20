@@ -1,4 +1,4 @@
-import type { Beat, Connector, Note, Score } from './ir.js';
+import type { Beat, Connector, Duration, Note, Score } from './ir.js';
 import { serialize } from './serialize.js';
 
 export interface AsciiResult {
@@ -154,6 +154,32 @@ function detectRepeat(lines: string[]): number | null {
 	return null;
 }
 
+// Representable durations in eighth-note units, largest first (whole … eighth).
+const DURATION_UNITS: { units: number; value: Duration['value']; dotted: boolean }[] = [
+	{ units: 8, value: 1, dotted: false },
+	{ units: 6, value: 2, dotted: true },
+	{ units: 4, value: 2, dotted: false },
+	{ units: 3, value: 4, dotted: true },
+	{ units: 2, value: 4, dotted: false },
+	{ units: 1, value: 8, dotted: false },
+];
+
+/** Greedily expresses N eighth-note units as standard durations (e.g. 5 → half + eighth). */
+function durationsForUnits(units: number): Duration[] {
+	const out: Duration[] = [];
+	let n = units;
+	while (n > 0) {
+		const d = DURATION_UNITS.find((x) => x.units <= n) ?? {
+			units: 1,
+			value: 8 as const,
+			dotted: false,
+		};
+		out.push({ value: d.value, dotted: d.dotted });
+		n -= d.units;
+	}
+	return out;
+}
+
 function barlineColumns(bodies: string[]): number[] {
 	const width = Math.max(...bodies.map((b) => b.length));
 	const cols: number[] = [];
@@ -195,28 +221,55 @@ function assembleBeats(
 	});
 
 	const cols = [...colSet].sort((a, b) => a - b);
-	const eighth = { value: 8 as const, dotted: false };
+	if (cols.length === 0) return [];
 
-	// One eighth-note beat per column (a chord when several strings line up on that column).
-	const allBeats: Beat[] = cols.map((c) => {
+	const beatAt = (c: number, duration: Duration): Beat => {
 		const notes: Note[] = [];
 		for (let str = 1; str <= stringCount; str++) {
 			const n = noteByStringCol.get(`${c}:${str}`);
 			if (n) notes.push(n);
 		}
 		if (notes.length === 1) {
-			return { kind: 'note', note: notes[0] as Note, duration: eighth, location: zero() };
+			return { kind: 'note', note: notes[0] as Note, duration, location: zero() };
 		}
-		return { kind: 'chord', notes, duration: eighth, location: zero() };
-	});
+		return { kind: 'chord', notes, duration, location: zero() };
+	};
 
-	// ASCII tab carries no reliable rhythm or measure grouping, so chunk the notes into
-	// bar-sized measures and pad the final partial bar with rests — every measure fills 4/4.
+	// Infer rhythm from horizontal spacing: the tightest gap between notes is one eighth, and
+	// a note is held until the next note starts. Wider gaps → longer notes.
+	const gaps: number[] = [];
+	for (let i = 0; i < cols.length - 1; i++)
+		gaps.push((cols[i + 1] as number) - (cols[i] as number));
+	const unit = gaps.length > 0 ? Math.max(1, Math.min(...gaps)) : 1;
+	const lengths = cols.map((c, i) =>
+		i < cols.length - 1
+			? Math.max(1, Math.min(eighthsPerBar, Math.round(((cols[i + 1] as number) - c) / unit)))
+			: 1,
+	);
+
+	// Lay the held notes onto bars, splitting across barlines and padding the last bar with rests.
 	const items: ReturnType<typeof assembleBeats> = [];
-	for (let i = 0; i < allBeats.length; i += eighthsPerBar) {
-		const beats = allBeats.slice(i, i + eighthsPerBar);
-		while (beats.length < eighthsPerBar) {
-			beats.push({ kind: 'rest', duration: eighth, location: zero() });
+	let beats: Beat[] = [];
+	let remaining = eighthsPerBar;
+	const closeBar = () => {
+		items.push({ beats, location: zero() });
+		beats = [];
+		remaining = eighthsPerBar;
+	};
+
+	cols.forEach((c, i) => {
+		let units = lengths[i] as number;
+		while (units > 0) {
+			if (remaining === 0) closeBar();
+			const take = Math.min(units, remaining);
+			for (const duration of durationsForUnits(take)) beats.push(beatAt(c, duration));
+			units -= take;
+			remaining -= take;
+		}
+	});
+	if (beats.length > 0) {
+		for (const duration of durationsForUnits(remaining)) {
+			beats.push({ kind: 'rest', duration, location: zero() });
 		}
 		items.push({ beats, location: zero() });
 	}

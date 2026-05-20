@@ -1,6 +1,6 @@
 'use client';
 
-import { type Diagnostic, parse, validate } from '@fretdown/core';
+import { type Diagnostic, expandRepeats, parse, validate } from '@fretdown/core';
 import { computeLayout, renderInto } from '@fretdown/render/browser';
 import { useEffect, useMemo, useRef } from 'react';
 
@@ -35,24 +35,27 @@ export function TabPreview({
 		return { score, errors: all.filter((d) => d.severity === 'error') };
 	}, [source]);
 
+	// Expand repeats so a `|: … :|xN` riff is shown (and measured) as N literal repetitions.
+	const playable = useMemo(() => (score ? expandRepeats(score) : null), [score]);
+
 	const layout = useMemo(
-		() => (score ? computeLayout(score, { width, measuresPerLine }) : null),
-		[score, width, measuresPerLine],
+		() => (playable ? computeLayout(playable, { width, measuresPerLine }) : null),
+		[playable, width, measuresPerLine],
 	);
 
 	useEffect(() => {
 		const el = ref.current;
 		if (!el) return;
 		el.innerHTML = '';
-		if (!score) return;
+		if (!playable) return;
 		try {
-			renderInto(el, score, { width, measuresPerLine });
+			renderInto(el, playable, { width, measuresPerLine });
 		} catch (err) {
 			el.innerHTML = `<p class="text-sm text-red-500">Render error: ${
 				err instanceof Error ? err.message : String(err)
 			}</p>`;
 		}
-	}, [score, width, measuresPerLine]);
+	}, [playable, width, measuresPerLine]);
 
 	const activeBoxes =
 		layout && cursor

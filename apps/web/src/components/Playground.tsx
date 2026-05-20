@@ -8,7 +8,7 @@ import { defaultProgram } from '@/lib/gm';
 import { TabPlayer, buildTimeline } from '@/lib/playback';
 import { SAMPLES } from '@/lib/samples';
 import { decodeSource, encodeSource } from '@/lib/share';
-import { parse, parseAsciiTab, toMidi, toMusicXML } from '@fretdown/core';
+import { expandRepeats, parse, parseAsciiTab, toMidi, toMusicXML } from '@fretdown/core';
 import Editor, { type Monaco, type OnMount } from '@monaco-editor/react';
 import { Check, Download, FileInput, Play, Share2, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -97,7 +97,8 @@ export function Playground() {
 		const score = playablesScore();
 		if (!score) return;
 		const onlyTrack = selected === 'all' ? undefined : selected;
-		const timeline = buildTimeline(score, onlyTrack);
+		// Expand repeats so playback (and the cursor) run through every repetition.
+		const timeline = buildTimeline(expandRepeats(score), onlyTrack);
 		if (timeline.events.length === 0 || timeline.barSeconds === 0) {
 			flash('Nothing to play yet.');
 			return;

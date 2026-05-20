@@ -17,6 +17,7 @@ export { parseAsciiTab } from './ascii.js';
 export type { AsciiResult } from './ascii.js';
 export { toMidi } from './midi.js';
 export { toMusicXML } from './musicxml.js';
+export { expandRepeats } from './repeats.js';
 
 /** Parses Fretdown source into a {@link Score}, collecting lexer and parser diagnostics. */
 export function parse(source: string): ParseResult {
