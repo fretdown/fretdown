@@ -1,6 +1,12 @@
-# Fretdown
+<p align="center">
+  <img src="assets/logo.png" alt="Fretdown" width="96" height="96" />
+</p>
 
-> Markdown for guitar and bass tabs.
+<h1 align="center">Fretdown</h1>
+
+<p align="center"><strong>Markdown for guitar and bass tabs.</strong><br/>
+<a href="https://fretdown.org">fretdown.org</a></p>
+
 
 **Fretdown** is an open-source, plaintext notation format for fretted instruments. It's
 text-first, git-friendly, deterministically parseable, and validator-backed.

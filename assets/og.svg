@@ -1,0 +1,21 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0f172a" />
+  <g transform="translate(82,66)">
+    <rect width="96" height="96" rx="20" fill="#0b1220" stroke="#1e293b" stroke-width="2" />
+    <g stroke="#f97316" stroke-width="6" stroke-linecap="round" opacity="0.55">
+      <line x1="18" y1="30" x2="60" y2="30" />
+      <line x1="18" y1="42" x2="48" y2="42" />
+    </g>
+    <path d="M21 75 H75 V21 Z" fill="#f97316" />
+  </g>
+  <text x="200" y="138" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="bold" fill="#f8fafc">Fretdown</text>
+  <text x="84" y="232" font-family="Arial, Helvetica, sans-serif" font-size="40" fill="#cbd5e1">Markdown for guitar &amp; bass tabs</text>
+  <rect x="82" y="278" width="1036" height="214" rx="16" fill="#0b1220" stroke="#1e293b" stroke-width="2" />
+  <text font-family="monospace" font-size="29" xml:space="preserve">
+    <tspan x="112" y="332" fill="#f97316">@track Guitar   @tuning E2 A2 D3 G3 B3 E4</tspan>
+    <tspan x="112" y="384" fill="#e2e8f0">intro:</tspan>
+    <tspan x="112" y="436" fill="#94a3b8">  |: s6f0:8 s5f2 s6f0 s5f2h3 s5f2 :|x2</tspan>
+  </text>
+  <text x="84" y="566" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="bold" fill="#f97316">fretdown.org</text>
+  <text x="1118" y="566" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#64748b">text-first · validator-backed · plays back</text>
+</svg>
