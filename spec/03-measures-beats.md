@@ -61,7 +61,10 @@ A measure may be prefixed with a volta bracket `[N]` indicating it is played onl
 `N` of the enclosing repeat. Multiple passes list multiple numbers: `[1,2]`.
 
 ```fretdown
-|: s6f0:4 s5f2 s4f2 s6f0
-[1] | s6f0:4 s5f2 s4f2 s4f0 :|
-[2] | s6f0:4 s5f2 s4f2 s6f2 |
+|: s6f0:4 s5f2 s4f2 s6f0 |
+[1] s6f0:4 s5f2 s4f2 s4f0 :|
+[2] s6f0:4 s5f2 s4f2 s6f2 |
 ```
+
+The volta bracket attaches to the measure whose beats follow it (here, the alternate
+endings), up to the next barline.

@@ -25,3 +25,11 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **Tuplets via `tN( … )`, N-in-time-of-prev-power-of-two** — standard musical semantics; `t3` triplet, `t5` quintuplet.
 - **Sections (`label:`) are separate from arrangement (`@arrange`)** — a short doc can describe a long song; `@arrange` references validated against existing labels.
 - **Note-atom internals decoded by a dedicated tested routine, not Chevrotain tokens** — avoids single-letter token collisions (h/p/b/r vs identifiers) and keeps the document grammar small; the decoder has its own production-level tests.
+
+## Core implementation
+
+- **One token type per directive keyword (`@title`, `@track`, …)** — Chevrotain's grammar must be static; branching on a token's `.image` inside a rule breaks the self-analysis/recording phase, so distinct tokens make every production statically reachable.
+- **Parser emits a flat `MusicItem[]` per section; measures assembled in `build.ts`** — shared barlines + voltas are awkward in a structured grammar; a tested assembly pass is clearer and handles repeat/volta attachment deterministically.
+- **Sub-rules return values rather than mutating passed-in ARGS** — ARGS are undefined during Chevrotain's recording phase, which would crash action code; returning partials and merging in the caller avoids it.
+- **Measure-fill checked with float fractions of a whole note + epsilon tolerance** — exact for dyadic durations and close enough for tuplet ratios (2/3, 4/5) without a rational-number dependency.
+- **No `composite`/project-references in tsconfigs** — tsup's `.d.ts` rollup conflicts with composite's "all files must be listed"; each package typechecks independently via its own include.

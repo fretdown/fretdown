@@ -3,11 +3,6 @@
 	"compilerOptions": {
 		"noEmit": true
 	},
-	"files": [],
-	"references": [
-		{ "path": "./packages/core" },
-		{ "path": "./packages/render" },
-		{ "path": "./packages/cli" },
-		{ "path": "./packages/mcp" }
-	]
+	"include": ["packages/*/src/**/*.ts", "apps/*/src/**/*.ts"],
+	"exclude": ["**/dist", "**/node_modules", "**/.next"]
 }
