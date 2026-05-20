@@ -108,6 +108,18 @@ describe('renderToSVG', () => {
 		expect(svg).toContain('>9<');
 	});
 
+	it('expands a slide inside a chord (one slide line per string)', () => {
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | (s5f17\\16 s6f15\\14):4. (s6f0 s5f0):8 |\n'),
+			{ width: 600 },
+		);
+		// no "\\14"/"\\16" fallback labels; both strings get a slide line
+		expect(svg.includes('\\14')).toBe(false);
+		expect(svg.match(/sl\./g)?.length).toBe(2);
+		expect(svg).toContain('>16<');
+		expect(svg).toContain('>14<');
+	});
+
 	it('draws a slide line for slide connectors', () => {
 		const svg = renderToSVG(
 			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f3/5:2 s2f5:2 |\n'),

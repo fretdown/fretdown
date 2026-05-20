@@ -269,10 +269,13 @@ interface Connection {
 	kind: 'hammer' | 'pull' | 'slide-up' | 'slide-down';
 	first: TabNote;
 	last: TabNote;
+	/** Position index within the (chord) note to connect; defaults to the first position. */
+	index?: number;
 }
 
 function drawConnection(ctx: RenderContext, c: Connection): void {
-	const notes = { first_note: c.first, last_note: c.last };
+	const idx = [c.index ?? 0];
+	const notes = { first_note: c.first, last_note: c.last, first_indices: idx, last_indices: idx };
 	const tie =
 		c.kind === 'hammer'
 			? TabTie.createHammeron(notes)
@@ -320,6 +323,26 @@ interface ChainSegment {
 	bends: FretEvent[];
 }
 
+interface Subdivision {
+	subDuration: Duration;
+	occupied: number;
+	isPow2: boolean;
+}
+
+/** How to split a beat into `count` equal chain noteheads (a tuplet when not a power of two). */
+function chainSubdivision(count: number, duration: Duration): Subdivision | null {
+	const isPow2 = (count & (count - 1)) === 0;
+	const occupied = isPow2 ? count : powerOfTwoBelow(count);
+	if (!isPow2 && duration.dotted) return null; // dotted + tuplet is out of scope
+	const subValue = duration.value * occupied;
+	if (!(subValue in DURATION_CODE)) return null; // would need a 64th note or smaller
+	return {
+		subDuration: { value: subValue as Duration['value'], dotted: isPow2 && duration.dotted },
+		occupied,
+		isPow2,
+	};
+}
+
 /**
  * Expands a beat into the tickables (and joining connections) it draws as. A connector
  * chain like `s5f2h3` becomes two slurred noteheads (fret 2 → fret 3) sharing the beat's
@@ -332,6 +355,9 @@ function expandBeat(beat: Beat): {
 } {
 	if (beat.kind === 'note') {
 		const chain = tryExpandChain(beat.note, beat.duration);
+		if (chain) return chain;
+	} else if (beat.kind === 'chord') {
+		const chain = tryExpandChord(beat.notes, beat.duration);
 		if (chain) return chain;
 	}
 	return { tickables: [beatToTickable(beat)], connections: [], tuplets: [] };
@@ -364,17 +390,9 @@ function tryExpandChain(
 	const count = segments.length;
 	if (count < 2) return null; // no transition → let decorate() draw the (possibly bent) note
 
-	const isPow2 = (count & (count - 1)) === 0;
-	// Power-of-two chains tile the beat exactly; others are a tuplet of `count` in `occupied`.
-	const occupied = isPow2 ? count : powerOfTwoBelow(count);
-	if (!isPow2 && duration.dotted) return null; // dotted + tuplet is out of scope
-	const subValue = duration.value * occupied;
-	if (!(subValue in DURATION_CODE)) return null; // would need a 64th note or smaller
-
-	const subDuration: Duration = {
-		value: subValue as Duration['value'],
-		dotted: isPow2 && duration.dotted,
-	};
+	const sub = chainSubdivision(count, duration);
+	if (!sub) return null;
+	const { subDuration, occupied, isPow2 } = sub;
 	const notes = segments.map(
 		(seg) =>
 			new TabNote({
@@ -425,6 +443,64 @@ function tryExpandChain(
 	});
 
 	const tickables = notes as unknown as StemmableNote[];
+	const tuplets = isPow2
+		? []
+		: [new Tuplet(tickables, { num_notes: count, notes_occupied: occupied })];
+	return { tickables, connections, tuplets };
+}
+
+/**
+ * Expands a chord whose notes share a transition chain — e.g. `(s5f17\16 s6f15\14)` slides
+ * down to `(s5f16 s6f14)`. Requires every note to have the same number of transition
+ * connectors (no bends); otherwise returns null and the chord falls back to one annotated note.
+ */
+function tryExpandChord(
+	notes: Note[],
+	duration: Duration,
+): { tickables: StemmableNote[]; connections: Connection[]; tuplets: Tuplet[] } | null {
+	if (notes.length === 0 || notes.some((n) => n.dead)) return null;
+	const events = notes[0]?.events.length ?? 0;
+	if (events === 0) return null;
+	if (!notes.every((n) => n.events.length === events)) return null;
+	if (notes.some((n) => n.events.some((e) => !TRANSITION_CONNECTORS.has(e.connector)))) return null;
+
+	const count = events + 1;
+	const sub = chainSubdivision(count, duration);
+	if (!sub) return null;
+	const { subDuration, occupied, isPow2 } = sub;
+
+	// The fret each note plays at step `s` (step 0 = its own fret, then each connector target).
+	const fretAt = (n: Note, step: number) =>
+		step === 0 ? (n.fret ?? 0) : (n.events[step - 1] as FretEvent).fret;
+
+	const chordNotes = Array.from({ length: count }, (_, step) => {
+		const positions = notes.map((n) => ({ str: n.string, fret: String(fretAt(n, step)) }));
+		return new TabNote({ positions, duration: durationCode(subDuration) });
+	});
+	if (subDuration.dotted) Dot.buildAndAttach(chordNotes, { all: true });
+
+	const connections: Connection[] = [];
+	for (let step = 0; step < count - 1; step++) {
+		const first = chordNotes[step];
+		const last = chordNotes[step + 1];
+		if (!first || !last) continue;
+		notes.forEach((n, index) => {
+			const event = n.events[step] as FretEvent;
+			const from = fretAt(n, step);
+			const to = event.fret;
+			const kind: Connection['kind'] =
+				event.connector === 'h'
+					? 'hammer'
+					: event.connector === 'p'
+						? 'pull'
+						: to >= from
+							? 'slide-up'
+							: 'slide-down';
+			connections.push({ kind, first, last, index });
+		});
+	}
+
+	const tickables = chordNotes as unknown as StemmableNote[];
 	const tuplets = isPow2
 		? []
 		: [new Tuplet(tickables, { num_notes: count, notes_occupied: occupied })];
