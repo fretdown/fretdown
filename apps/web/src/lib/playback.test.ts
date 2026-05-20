@@ -48,4 +48,25 @@ describe('buildTimeline', () => {
 		expect(channelFor(0)).toBe(0);
 		expect(channelFor(9)).toBe(10);
 	});
+
+	it('solos a single track when onlyTrack is given', () => {
+		const twoTracks = `@time 4/4
+@track Guitar
+@instrument guitar
+@tuning E2 A2 D3 G3 B3 E4
+r:
+  | s6f0:4 s5f2 s4f2 s3f0 |
+@track Bass
+@instrument bass
+@tuning E1 A1 D2 G2
+r:
+  | s4f0:4 s4f0 s3f2 s3f0 |
+`;
+		const all = buildTimeline(scoreFrom(twoTracks));
+		expect(new Set(all.events.map((e) => e.channel))).toEqual(new Set([0, 1]));
+
+		const bassOnly = buildTimeline(scoreFrom(twoTracks), 1);
+		expect(bassOnly.events.every((e) => e.channel === 1)).toBe(true);
+		expect(bassOnly.events.length).toBeGreaterThan(0);
+	});
 });

@@ -34,8 +34,11 @@ export function channelFor(trackIndex: number): number {
 	return trackIndex < 9 ? trackIndex : trackIndex + 1;
 }
 
-/** Builds a flat, time-sorted schedule of note events from a score. */
-export function buildTimeline(score: Score): Timeline {
+/**
+ * Builds a flat, time-sorted schedule of note events from a score. Pass `onlyTrack` to
+ * solo a single track (by index); omit it to play every track together.
+ */
+export function buildTimeline(score: Score, onlyTrack?: number): Timeline {
 	const bpm = score.metadata.tempo ?? 120;
 	const wholeNote = (4 * 60) / bpm; // a whole note is always four quarter notes
 	const { numerator, denominator } = score.metadata.time;
@@ -45,6 +48,7 @@ export function buildTimeline(score: Score): Timeline {
 	let measureCount = 0;
 
 	score.tracks.forEach((track, trackIndex) => {
+		if (onlyTrack !== undefined && trackIndex !== onlyTrack) return;
 		const channel = channelFor(trackIndex);
 		const measures = track.sections.flatMap((s) =>
 			s.items.filter((it): it is Measure => 'beats' in it),

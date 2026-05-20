@@ -31,7 +31,7 @@ const FEATURES = [
 	},
 	{
 		title: 'Hear it play',
-		body: 'Press Play in the playground to hear the tab through a General MIDI synth, with a cursor tracking the bar — and swap each track’s instrument on the fly.',
+		body: 'Press Play in the playground to hear the tab through a General MIDI synth, with a cursor tracking the bar — play every track together or solo just one.',
 	},
 ];
 

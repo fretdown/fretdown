@@ -9,6 +9,8 @@ export interface PlaybackCursor {
 	measureIndex: number;
 	/** 0–1 progress through the current measure. */
 	progress: number;
+	/** When soloing a track, only highlight that track's measures. */
+	trackIndex?: number;
 }
 
 export interface TabPreviewProps {
@@ -53,7 +55,13 @@ export function TabPreview({
 	}, [score, width, measuresPerLine]);
 
 	const activeBoxes =
-		layout && cursor ? layout.measures.filter((m) => m.measureIndex === cursor.measureIndex) : [];
+		layout && cursor
+			? layout.measures.filter(
+					(m) =>
+						m.measureIndex === cursor.measureIndex &&
+						(cursor.trackIndex === undefined || m.trackIndex === cursor.trackIndex),
+				)
+			: [];
 
 	return (
 		<div className="space-y-3">

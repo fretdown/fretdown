@@ -4,7 +4,7 @@ import { type PlaybackCursor, TabPreview } from '@/components/TabPreview';
 import { Button } from '@/components/ui/button';
 import { EXAMPLE_SOURCE } from '@/lib/example';
 import { FRETDOWN_LANGUAGE_ID, computeMarkers, registerFretdown } from '@/lib/fretdown-language';
-import { GM_INSTRUMENTS, defaultProgram } from '@/lib/gm';
+import { defaultProgram } from '@/lib/gm';
 import { TabPlayer, buildTimeline } from '@/lib/playback';
 import { decodeSource, encodeSource } from '@/lib/share';
 import { parse, toMidi, toMusicXML } from '@fretdown/core';
@@ -19,7 +19,8 @@ export function Playground() {
 	const [notice, setNotice] = useState<string | null>(null);
 	const [playing, setPlaying] = useState(false);
 	const [cursor, setCursor] = useState<PlaybackCursor | null>(null);
-	const [programs, setPrograms] = useState<number[]>([]);
+	// Which track to play: 'all' (every track together) or a single track index (solo).
+	const [selected, setSelected] = useState<number | 'all'>('all');
 	const monacoRef = useRef<Monaco | null>(null);
 	const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 	const playerRef = useRef<TabPlayer | null>(null);
@@ -28,10 +29,10 @@ export function Playground() {
 	const parsed = useMemo(() => parse(source), [source]);
 	const tracks = useMemo(() => parsed.score?.tracks ?? [], [parsed]);
 
-	// Keep one instrument program per track, preserving picks across edits by index.
+	// Reset the selection if the chosen track no longer exists after an edit.
 	useEffect(() => {
-		setPrograms((prev) => tracks.map((t, i) => prev[i] ?? defaultProgram(t.instrument)));
-	}, [tracks]);
+		setSelected((prev) => (prev === 'all' || prev < tracks.length ? prev : 'all'));
+	}, [tracks.length]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -91,7 +92,8 @@ export function Playground() {
 		}
 		const score = playablesScore();
 		if (!score) return;
-		const timeline = buildTimeline(score);
+		const onlyTrack = selected === 'all' ? undefined : selected;
+		const timeline = buildTimeline(score, onlyTrack);
 		if (timeline.events.length === 0 || timeline.barSeconds === 0) {
 			flash('Nothing to play yet.');
 			return;
@@ -99,14 +101,15 @@ export function Playground() {
 		setPlaying(true);
 		await playerRef.current?.play(
 			timeline,
-			tracks.map((t, i) => programs[i] ?? defaultProgram(t.instrument)),
+			// Each track keeps its instrument's GM program; only the soloed track has events.
+			tracks.map((t) => defaultProgram(t.instrument)),
 			(elapsed) => {
 				const idx = Math.min(Math.floor(elapsed / timeline.barSeconds), timeline.measureCount - 1);
 				const progress = Math.min(
 					1,
 					Math.max(0, (elapsed - idx * timeline.barSeconds) / timeline.barSeconds),
 				);
-				setCursor({ measureIndex: Math.max(0, idx), progress });
+				setCursor({ measureIndex: Math.max(0, idx), progress, trackIndex: onlyTrack });
 			},
 			() => {
 				setPlaying(false);
@@ -115,13 +118,14 @@ export function Playground() {
 		);
 	};
 
-	const handleInstrument = (trackIndex: number, program: number) => {
-		setPrograms((prev) => {
-			const next = [...prev];
-			next[trackIndex] = program;
-			return next;
-		});
-		playerRef.current?.setProgram(trackIndex, program);
+	const handleSelect = (value: number | 'all') => {
+		setSelected(value);
+		// Stop so the change is obvious; the next Play uses the new selection.
+		if (playing) {
+			playerRef.current?.stop();
+			setPlaying(false);
+			setCursor(null);
+		}
 	};
 
 	const handleExport = (format: 'midi' | 'musicxml') => {
@@ -161,6 +165,23 @@ export function Playground() {
 						{playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
 						{playing ? 'Stop' : 'Play'}
 					</Button>
+					{tracks.length > 0 && (
+						<select
+							aria-label="Instrument to play"
+							className="rounded border border-border bg-background px-2 py-1 text-sm"
+							value={selected === 'all' ? 'all' : String(selected)}
+							onChange={(e) =>
+								handleSelect(e.target.value === 'all' ? 'all' : Number(e.target.value))
+							}
+						>
+							<option value="all">All instruments</option>
+							{tracks.map((track, i) => (
+								<option key={`${track.name}-${i}`} value={i}>
+									{track.name}
+								</option>
+							))}
+						</select>
+					)}
 					<Button size="sm" variant="outline" onClick={() => handleExport('midi')}>
 						<Download className="h-4 w-4" />
 						MIDI
@@ -175,28 +196,6 @@ export function Playground() {
 					</Button>
 				</div>
 			</div>
-
-			{tracks.length > 0 && (
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2 text-sm">
-					<span className="text-muted-foreground">Instruments:</span>
-					{tracks.map((track, i) => (
-						<label key={`${track.name}-${i}`} className="flex items-center gap-1.5">
-							<span className="font-medium">{track.name}</span>
-							<select
-								className="rounded border border-border bg-background px-1.5 py-0.5 text-sm"
-								value={programs[i] ?? defaultProgram(track.instrument)}
-								onChange={(e) => handleInstrument(i, Number(e.target.value))}
-							>
-								{GM_INSTRUMENTS.map((name, prog) => (
-									<option key={name} value={prog}>
-										{name}
-									</option>
-								))}
-							</select>
-						</label>
-					))}
-				</div>
-			)}
 
 			<PanelGroup direction="horizontal" className="flex-1">
 				<Panel defaultSize={45} minSize={25}>
