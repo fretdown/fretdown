@@ -1,0 +1,28 @@
+{
+	"name": "@fretdown/mcp",
+	"version": "0.1.0",
+	"description": "Fretdown Model Context Protocol server",
+	"type": "module",
+	"license": "MIT",
+	"bin": {
+		"fretdown-mcp": "./dist/index.js"
+	},
+	"files": ["dist"],
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"test": "vitest run --passWithNoTests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@fretdown/core": "workspace:*",
+		"@fretdown/render": "workspace:*",
+		"@modelcontextprotocol/sdk": "^1.0.4",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8"
+	}
+}

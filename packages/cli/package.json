@@ -1,0 +1,28 @@
+{
+	"name": "@fretdown/cli",
+	"version": "0.1.0",
+	"description": "Fretdown command-line tool",
+	"type": "module",
+	"license": "MIT",
+	"bin": {
+		"fretdown": "./dist/index.js"
+	},
+	"files": ["dist"],
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"test": "vitest run --passWithNoTests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@fretdown/core": "workspace:*",
+		"@fretdown/render": "workspace:*",
+		"citty": "^0.1.6",
+		"picocolors": "^1.1.1"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.2",
+		"vitest": "^2.1.8"
+	}
+}
