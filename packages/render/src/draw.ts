@@ -304,6 +304,7 @@ function buildTickables(measure: Measure): {
 			const expanded = expandBeat(beat);
 			tickables.push(...expanded.tickables);
 			connections.push(...expanded.connections);
+			tuplets.push(...expanded.tuplets);
 		}
 	}
 	return { tickables, tuplets, connections };
@@ -321,34 +322,44 @@ const CONNECTOR_KIND: Record<string, Connection['kind']> = {
  * chain like `s5f2h3` becomes two slurred noteheads (fret 2 → fret 3) sharing the beat's
  * duration; anything that doesn't qualify falls back to a single annotated note.
  */
-function expandBeat(beat: Beat): { tickables: StemmableNote[]; connections: Connection[] } {
+function expandBeat(beat: Beat): {
+	tickables: StemmableNote[];
+	connections: Connection[];
+	tuplets: Tuplet[];
+} {
 	if (beat.kind === 'note') {
 		const chain = tryExpandChain(beat.note, beat.duration);
 		if (chain) return chain;
 	}
-	return { tickables: [beatToTickable(beat)], connections: [] };
+	return { tickables: [beatToTickable(beat)], connections: [], tuplets: [] };
 }
 
 /**
  * Builds a hammer/pull/slide chain, or returns null when it can't be drawn faithfully:
- * a dead/dotted note, a non-transition connector (bend/release), or a beat that can't
- * subdivide evenly into the chain's length using a real note value (≤ 32nd).
+ * a dead note, a non-transition connector (bend/release), or a beat that can't subdivide
+ * into a real note value (≤ 32nd). A power-of-two chain subdivides evenly; an odd length
+ * (e.g. 3) is drawn as a tuplet (3 notes in the space of 2).
  */
 function tryExpandChain(
 	note: Note,
 	duration: Duration,
-): { tickables: StemmableNote[]; connections: Connection[] } | null {
+): { tickables: StemmableNote[]; connections: Connection[]; tuplets: Tuplet[] } | null {
 	if (note.dead || note.events.length === 0) return null;
 	if (!note.events.every((e) => e.connector in CONNECTOR_KIND)) return null;
 
 	const count = note.events.length + 1;
-	if ((count & (count - 1)) !== 0) return null; // chain length must be a power of two
-	const subValue = duration.value * count;
+	const isPow2 = (count & (count - 1)) === 0;
+	// Power-of-two chains tile the beat exactly; others are a tuplet of `count` in `occupied`.
+	const occupied = isPow2 ? count : powerOfTwoBelow(count);
+	if (!isPow2 && duration.dotted) return null; // dotted + tuplet is out of scope
+	const subValue = duration.value * occupied;
 	if (!(subValue in DURATION_CODE)) return null; // would need a 64th note or smaller
 
-	// Splitting a duration into `count` equal parts keeps the dot: a dotted quarter → dotted 8ths.
 	const frets = [note.fret ?? 0, ...note.events.map((e) => e.fret)];
-	const subDuration: Duration = { value: subValue as Duration['value'], dotted: duration.dotted };
+	const subDuration: Duration = {
+		value: subValue as Duration['value'],
+		dotted: isPow2 && duration.dotted,
+	};
 	const notes = frets.map(
 		(fret) =>
 			new TabNote({
@@ -381,7 +392,12 @@ function tryExpandChain(
 		const last = notes[i + 1];
 		if (kind && first && last) connections.push({ kind, first, last });
 	});
-	return { tickables: notes as unknown as StemmableNote[], connections };
+
+	const tickables = notes as unknown as StemmableNote[];
+	const tuplets = isPow2
+		? []
+		: [new Tuplet(tickables, { num_notes: count, notes_occupied: occupied })];
+	return { tickables, connections, tuplets };
 }
 
 function beatToTickable(beat: Beat): StemmableNote {

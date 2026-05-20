@@ -85,6 +85,18 @@ describe('renderToSVG', () => {
 		expect(svg).not.toContain('p7');
 	});
 
+	it('expands an odd-length chain (drawn as a tuplet) instead of a text label', () => {
+		// s4f7/9\7 has 2 events → length 3 (not a power of two): a tuplet, not a label
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s4f7/9\\7:4 s4f7:2 s4f7:4 |\n'),
+			{ width: 600 },
+		);
+		// two slide lines (up to 9, back down to 7), no "/9" / "\\7" fallback text
+		expect(svg.match(/sl\./g)?.length).toBe(2);
+		expect(svg).not.toContain('/9');
+		expect(svg).toContain('>9<');
+	});
+
 	it('draws a slide line for slide connectors', () => {
 		const svg = renderToSVG(
 			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f3/5:2 s2f5:2 |\n'),
