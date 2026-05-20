@@ -28,6 +28,19 @@ Render a file to an SVG.
 fretdown render song.fd --out song.svg
 ```
 
+### `fretdown export <file> --out <path>`
+
+Export a `.fd` file to **MIDI** (`.mid`) or **MusicXML** (`.musicxml`). The format is
+inferred from the `--out` extension, or set it explicitly with `--format midi|musicxml`.
+Pitches come from the tuning (open string + fret + capo); hammer/pull/slide chains play
+their target frets in sequence.
+
+```sh
+fretdown export song.fd --out song.mid
+fretdown export song.fd --out song.musicxml
+fretdown export song.fd --out song.dat --format midi
+```
+
 ### `fretdown convert <ascii-file>`
 
 Best-effort conversion of a legacy ASCII tab into Fretdown. Rhythm cannot be recovered

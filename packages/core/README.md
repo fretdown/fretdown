@@ -6,12 +6,14 @@ The parser, intermediate representation (IR), validator, and serializer for
 ## API
 
 ```ts
-import { parse, validate, serialize, parseAsciiTab } from '@fretdown/core';
+import { parse, validate, serialize, toMidi, toMusicXML } from '@fretdown/core';
 
 const { score, diagnostics } = parse(source); // ParseResult
 if (score) {
   const problems = validate(score);            // Diagnostic[]
   const canonical = serialize(score);          // canonical .fd text
+  const midi = toMidi(score);                  // Uint8Array (Standard MIDI File)
+  const xml = toMusicXML(score);               // MusicXML 3.1 string
 }
 ```
 
@@ -20,6 +22,8 @@ if (score) {
 | `parse(source)` | Lex + parse Fretdown text into a `Score` (plus lexer/parser diagnostics). |
 | `validate(score)` | Walk the IR and return structured `Diagnostic[]` (fret/string range, measure fill, `@arrange` references, tuning pitches, articulations). |
 | `serialize(score)` | Emit canonical `.fd` text with explicit durations (round-trips through `parse`). |
+| `toMidi(score)` | Export to a Standard MIDI File (`Uint8Array`): one conductor track plus one track per instrument, pitches from tuning + fret + capo. Deterministic. |
+| `toMusicXML(score)` | Export to a MusicXML 3.1 score-partwise string with tab staff details (`<string>`/`<fret>`) and pitch. Deterministic. |
 | `parseAsciiTab(text)` | Best-effort import of legacy ASCII tab into a partial `Score` with confidence + ambiguity flags. |
 | `decodeNoteAtom(atom)` | Decode a single note lexeme (e.g. `s3f5h7.vib`). |
 | `parsePitch` / `isValidPitch` | Scientific-pitch helpers. |

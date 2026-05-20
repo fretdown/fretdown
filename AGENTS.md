@@ -10,12 +10,14 @@ and bass tabs"). The repo is a pnpm + Turborepo monorepo (Node 20+, TypeScript s
 ## Layout
 
 ```
-packages/core     # parser (Chevrotain), IR + validator (Zod), serializer, ASCII import
+packages/core     # parser (Chevrotain), IR + validator (Zod), serializer, ASCII import,
+                  #   MIDI + MusicXML export (midi.ts / musicxml.ts)
 packages/render   # VexFlow → SVG renderer (Node entry + jsdom-free /browser entry)
-packages/cli      # `fretdown` CLI: validate / render / convert (citty)
-packages/mcp      # MCP stdio server exposing 4 deterministic tools
+packages/cli      # `fretdown` CLI: validate / render / export / convert (citty)
+packages/mcp      # MCP stdio server exposing 5 deterministic tools
 apps/web          # Next.js 15 playground (/play), landing, and /spec site
 spec/             # the notation spec (rendered by the web app)
+grammars/         # portable TextMate grammar for editor syntax highlighting
 fixtures/         # canonical .fd corpus (sunshine-riff.fd)
 DECISIONS.md      # running log of every non-obvious design decision
 ```

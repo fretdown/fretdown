@@ -38,9 +38,21 @@ A running log of design decisions and their rationale. Each entry is one line.
 
 - **Headless rendering via jsdom with stubbed SVG text metrics** — VexFlow's SVG backend wants a DOM and `getBBox`; jsdom plus a constant-size `getBBox`/`getComputedTextLength` stub yields deterministic SVG (only sub-pixel text placement is approximate, which is fine for snapshots).
 - **`TabStave`/`TabNote` with `num_lines` from the tuning** — Fretdown is tab-native, so VexFlow's tab primitives map directly; 4-line bass vs 6-line guitar driven by string count.
-- **A connector chain (e.g. `s5f2h3`) is one beat → render the first fret + a technique annotation; bends use VexFlow's `Bend`** — a `TabNote` is a single attack, so multi-fret transitions within one beat are shown as annotations (`h3`, `/3`, `pm`) rather than multiple noteheads. **Known v1 limitation**, noted for review.
+- **A connector chain (e.g. `s5f2h3`) expands into multiple `TabNote`s joined by VexFlow connectors** — hammer/pull use `TabTie.createHammeron`/`createPulloff`, slides use `TabSlide.createSlideUp`/`createSlideDown`, drawn after the voice is laid out (they read note coordinates). The beat's duration is subdivided evenly across the chain so ticks stay aligned, but only when the chain length is a power of two and the per-note value is ≤ a 32nd; dead/dotted notes, non-transition connectors (`b`/`r`), and chains inside tuplets fall back to the single-note + annotation rendering. Bends still attach a `Bend` modifier to one note (a bend is a single attack). _(Supersedes the original v1 limitation of rendering only the first fret + a text annotation.)_
 - **Voices use SOFT mode** — the core validator already guarantees measures are well-formed, so strict tick-counting (which dotted/tuplet face-values complicate) isn't needed for layout.
 - **Rests render as VexFlow `GhostNote`** — tab has no standard rest glyph; a ghost preserves spacing.
+
+## Export (MIDI / MusicXML)
+
+- **MIDI written by a hand-rolled SMF encoder in `core/midi.ts` — no dependency** — a Standard MIDI File is a small, well-specified byte format; emitting it directly keeps `core` dependency-free (the repo's hard rule) and fully deterministic. Format 1: a conductor track (tempo + time signature) plus one track per instrument.
+- **PPQ 480 for MIDI, divisions 24 for MusicXML** — both make every supported duration integral, including eighth-note triplets (480/3, 24·2/3) and 32nd notes; avoids a rational-number dependency.
+- **Pitch = `tuning[length − string]` open pitch + fret + capo** — the tuning array is low→high (highest string number maps to `s1`), so the open pitch for `note.string` is indexed from the end; capo raises the sounding pitch while tab fret numbers stay relative to it.
+- **Hammer/pull/slide chains play/notate their target frets, not just the start** — MIDI subdivides the beat across the chain with float steps (any chain length); MusicXML reuses the renderer's power-of-two subdivision rule and connects notes with `<slur>`/`<slide>`. Keeps audio/notation consistent with the SVG.
+- **Dead notes are silent in MIDI and `<unpitched>` in MusicXML; bends play/notate the start fret** — a muted string has no pitch, and MusicXML bend markup is out of scope for v1.
+
+## Editor tooling
+
+- **A portable TextMate grammar in `grammars/` mirrors the playground's Monaco/Monarch tokenizer** — the playground already had Monarch highlighting + validator markers, but nothing worked outside it; the `.tmLanguage.json` (scope `source.fretdown`) gives VS Code / GitHub Linguist / Sublime the same highlighting without depending on Monaco.
 
 ## Web playground
 
@@ -64,3 +76,4 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **CLI command logic split into pure `run*()` functions; `index.ts` only does fs + citty wiring** — so stdout/exit-code behavior is unit-testable without spawning a process.
 - **`render` blocks only on parse errors, not validation warnings** — a parseable-but-imperfect score still renders; validation issues surface via `validate`.
 - **`convert` emits a commented stub (confidence %, ambiguity TODOs)** — deterministic ASCII import can't recover rhythm, so the output is explicitly flagged for human review.
+- **`export` infers format from the `--out` extension (`.mid`/`.midi` → MIDI, `.musicxml`/`.xml` → MusicXML), overridable with `--format`** — matches how `render` already takes `--out`, and lets `runExport` stay a pure function returning bytes-or-string for testing.

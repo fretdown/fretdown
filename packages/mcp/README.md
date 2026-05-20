@@ -13,6 +13,7 @@ reasoning.
 | `render_fretdown_to_svg` | `source: string` | `{ svg, diagnostics }` — SVG tablature string. |
 | `convert_ir_to_fretdown` | `ir: object` | `{ fretdown, error }` — canonical `.fd` text from a Score IR. |
 | `parse_ascii_tab` | `text: string` | `{ score, fretdown, confidence, ambiguities }` — best-effort import of legacy ASCII tab (rhythm approximated). |
+| `export_fretdown` | `source: string`, `format: 'midi' \| 'musicxml'` | `{ data, encoding, diagnostics }` — MusicXML as UTF-8 text or MIDI as base64 bytes (see `encoding`). |
 
 ## Install
 
@@ -57,7 +58,7 @@ If installed globally, you can instead use the `fretdown-mcp` binary:
 }
 ```
 
-Restart Claude Desktop; the four Fretdown tools will appear.
+Restart Claude Desktop; the five Fretdown tools will appear.
 
 ## Transport
 

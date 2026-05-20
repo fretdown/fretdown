@@ -23,6 +23,9 @@ intro:
 - **Validator-backed** — fret/string ranges, measures that fill the bar, and section
   references are checked with precise diagnostics.
 - **Fretted-instrument-agnostic** — guitar, bass, 7-string, ukulele, and beyond.
+- **Exports to MIDI & MusicXML** — play a tab back, or open it in notation software.
+- **Editor support** — a portable TextMate grammar in [`grammars/`](./grammars) for
+  syntax highlighting outside the playground.
 
 ## Packages
 
@@ -49,19 +52,25 @@ Try it:
 node packages/cli/dist/index.js validate fixtures/sunshine-riff.fd
 node packages/cli/dist/index.js render  fixtures/sunshine-riff.fd --out out.svg
 
-# run the playground (Monaco editor + live render)
+# export to MIDI or MusicXML (format inferred from the extension)
+node packages/cli/dist/index.js export fixtures/sunshine-riff.fd --out song.mid
+node packages/cli/dist/index.js export fixtures/sunshine-riff.fd --out song.musicxml
+
+# run the playground (Monaco editor + live render + export buttons)
 pnpm --filter web dev   # http://localhost:3000/play
 ```
 
 Use the library directly:
 
 ```ts
-import { parse, validate } from '@fretdown/core';
+import { parse, validate, toMidi, toMusicXML } from '@fretdown/core';
 import { renderToSVG } from '@fretdown/render';
 
 const { score } = parse(source);
 const problems = validate(score!);
 const svg = renderToSVG(score!);
+const midi = toMidi(score!); // Uint8Array (Standard MIDI File)
+const xml = toMusicXML(score!); // MusicXML 3.1 string
 ```
 
 ## Documentation
