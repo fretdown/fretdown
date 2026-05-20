@@ -1,4 +1,5 @@
-import { type Beat, type Connector, type Note, type Score, serialize } from '@fretdown/core';
+import type { Beat, Connector, Note, Score } from './ir.js';
+import { serialize } from './serialize.js';
 
 export interface AsciiResult {
 	score: Score | null;

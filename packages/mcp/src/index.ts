@@ -4,8 +4,6 @@ import { createServer } from './server.js';
 
 export { createServer } from './server.js';
 export * from './tools.js';
-export { parseAsciiTab } from './ascii.js';
-export type { AsciiResult } from './ascii.js';
 
 async function main(): Promise<void> {
 	const server = createServer();

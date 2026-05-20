@@ -1,6 +1,13 @@
-import { type Diagnostic, parse, scoreSchema, serialize, validate } from '@fretdown/core';
+import {
+	type AsciiResult,
+	type Diagnostic,
+	parse,
+	parseAsciiTab,
+	scoreSchema,
+	serialize,
+	validate,
+} from '@fretdown/core';
 import { renderToSVG } from '@fretdown/render';
-import { type AsciiResult, parseAsciiTab } from './ascii.js';
 
 export interface ValidateResult {
 	ok: boolean;

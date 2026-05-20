@@ -12,6 +12,8 @@ export { parsePitch, isValidPitch } from './pitch.js';
 export type { ParsedPitch } from './pitch.js';
 export { validate, beatDuration } from './validator.js';
 export { serialize } from './serialize.js';
+export { parseAsciiTab } from './ascii.js';
+export type { AsciiResult } from './ascii.js';
 
 /** Parses Fretdown source into a {@link Score}, collecting lexer and parser diagnostics. */
 export function parse(source: string): ParseResult {

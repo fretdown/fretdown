@@ -1,6 +1,6 @@
-import { parse, validate } from '@fretdown/core';
 import { describe, expect, it } from 'vitest';
 import { parseAsciiTab } from './ascii.js';
+import { parse } from './index.js';
 
 const GUITAR_TAB = `e|---0---3---|
 B|---1---1---|

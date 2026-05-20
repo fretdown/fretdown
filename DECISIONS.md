@@ -57,3 +57,10 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **Tool logic is pure functions in `tools.ts`; `server.ts` only wires MCP** — keeps the deterministic capabilities unit-testable without a transport, honoring "MCP does no reasoning."
 - **`parse_ascii_tab` is explicitly best-effort: rhythm approximated to eighth notes, tuning guessed from string count, techniques attached as connector events** — ASCII tab carries no reliable rhythm, so the tool returns a confidence score and ambiguity flags rather than pretending to be exact.
 - **Server entry guards `main()` with an `argv[1] === import.meta.url` check** — so importing the module in tests doesn't start a stdio server.
+
+## CLI
+
+- **`parseAsciiTab` moved from mcp into core** — both the CLI `convert` command and the MCP `parse_ascii_tab` tool need it; core is the shared home and keeps the CLI from depending on the MCP server package.
+- **CLI command logic split into pure `run*()` functions; `index.ts` only does fs + citty wiring** — so stdout/exit-code behavior is unit-testable without spawning a process.
+- **`render` blocks only on parse errors, not validation warnings** — a parseable-but-imperfect score still renders; validation issues surface via `validate`.
+- **`convert` emits a commented stub (confidence %, ambiguity TODOs)** — deterministic ASCII import can't recover rhythm, so the output is explicitly flagged for human review.
