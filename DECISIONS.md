@@ -52,6 +52,7 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **Dead notes are silent in MIDI and `<unpitched>` in MusicXML; bends play/notate the start fret** — a muted string has no pitch, and MusicXML bend markup is out of scope for v1.
 - **MIDI/playback sound every connector's target fret, including bends and releases** — a `b`/`r` event has a target fret like a hammer/pull does, so it's played as a sequential pitch (re-articulated, no pitch-bend gliding yet); otherwise bent notes carried no melody. The renderer still draws bends as a `Bend` arrow.
 - **Slide render direction comes from the fret movement, not the `/`/`\` glyph** — `to ≥ from` draws slide-up, else slide-down, so a slide always slopes the way it actually moves.
+- **Technique annotations sit above the staff (TOP), and `b…r…` renders as one bend-and-release** — VexFlow `Annotation` justification is stave-relative, so BOTTOM placed labels like `p14`/`rel` on the 6th-string line regardless of the note's string; TOP keeps them clearly above. A bend followed by a release becomes a single `Bend(text, release=true)` arrow rather than a floating `rel`.
 
 ## Editor tooling
 

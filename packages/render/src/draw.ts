@@ -357,7 +357,7 @@ function tryExpandChain(
 	);
 	const head = notes[0];
 	if (head && note.articulations.length > 0) {
-		head.addModifier(new Annotation(note.articulations.join(' ')).setVerticalJustification(3), 0);
+		head.addModifier(new Annotation(note.articulations.join(' ')).setVerticalJustification(1), 0);
 	}
 
 	const connections: Connection[] = [];
@@ -405,11 +405,16 @@ function beatToTickable(beat: Beat): StemmableNote {
 }
 
 function decorate(tabNote: TabNote, note: Note): void {
+	const from = note.fret ?? 0;
 	const labels: string[] = [];
-	for (const event of note.events) {
+	for (let i = 0; i < note.events.length; i++) {
+		const event = note.events[i];
+		if (!event) continue;
 		if (event.connector === 'b') {
-			const from = note.fret ?? 0;
-			tabNote.addModifier(new Bend(bendText(event.fret - from)), 0);
+			// A bend immediately followed by a release draws as one bend-and-return arrow.
+			const release = note.events[i + 1]?.connector === 'r';
+			tabNote.addModifier(new Bend(bendText(event.fret - from), release), 0);
+			if (release) i++;
 		} else if (event.connector === 'r') {
 			labels.push('rel');
 		} else {
@@ -418,7 +423,8 @@ function decorate(tabNote: TabNote, note: Note): void {
 	}
 	if (note.articulations.length > 0) labels.push(...note.articulations);
 	if (labels.length > 0) {
-		tabNote.addModifier(new Annotation(labels.join(' ')).setVerticalJustification(3), 0);
+		// TOP justification keeps technique text above the staff, not on the bottom string line.
+		tabNote.addModifier(new Annotation(labels.join(' ')).setVerticalJustification(1), 0);
 	}
 }
 

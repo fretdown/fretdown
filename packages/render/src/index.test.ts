@@ -95,6 +95,31 @@ describe('renderToSVG', () => {
 		expect(svg).not.toContain('/5');
 	});
 
+	it('places technique annotations above the staff, not on the bottom string', () => {
+		// a dotted pull-off falls back to a "p14" annotation; it must sit above the top line
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f15p14:4. s2f3:8 |\n'),
+			{
+				width: 600,
+			},
+		);
+		const annotationY = Number(
+			svg.match(/<text stroke="none" x="[\d.]+" y="([\d.]+)">p14<\/text>/)?.[1],
+		);
+		const topLineY = Number(svg.match(/<path fill="none" d="M[\d.]+ ([\d.]+)/)?.[1]);
+		expect(annotationY).toBeLessThan(topLineY);
+	});
+
+	it('folds a bend-and-release into the bend, with no floating "rel"', () => {
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s1f14b15r14:2 s1f0:2 |\n'),
+			{
+				width: 600,
+			},
+		);
+		expect(/<text[^>]*>rel<\/text>/.test(svg)).toBe(false);
+	});
+
 	it('draws a downward slide when the target fret is lower', () => {
 		// a slide from fret 7 down to fret 3 should render (direction taken from the frets)
 		const svg = renderToSVG(
