@@ -29,6 +29,10 @@ const FEATURES = [
 		title: 'Renders real techniques',
 		body: 'Hammer-ons, pull-offs, and slides draw as slurred noteheads (not just text), with bends and palm mutes annotated.',
 	},
+	{
+		title: 'Hear it play',
+		body: 'Press Play in the playground to hear the tab through a General MIDI synth, with a cursor tracking the bar — and swap each track’s instrument on the fly.',
+	},
 ];
 
 export default function HomePage() {

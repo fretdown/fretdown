@@ -1,21 +1,37 @@
 'use client';
 
-import { TabPreview } from '@/components/TabPreview';
+import { type PlaybackCursor, TabPreview } from '@/components/TabPreview';
 import { Button } from '@/components/ui/button';
 import { EXAMPLE_SOURCE } from '@/lib/example';
 import { FRETDOWN_LANGUAGE_ID, computeMarkers, registerFretdown } from '@/lib/fretdown-language';
+import { GM_INSTRUMENTS, defaultProgram } from '@/lib/gm';
+import { TabPlayer, buildTimeline } from '@/lib/playback';
 import { decodeSource, encodeSource } from '@/lib/share';
 import { parse, toMidi, toMusicXML } from '@fretdown/core';
 import Editor, { type Monaco, type OnMount } from '@monaco-editor/react';
-import { Check, Download, Share2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Download, Play, Share2, Square } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 export function Playground() {
 	const [source, setSource] = useState(EXAMPLE_SOURCE);
 	const [shared, setShared] = useState(false);
+	const [notice, setNotice] = useState<string | null>(null);
+	const [playing, setPlaying] = useState(false);
+	const [cursor, setCursor] = useState<PlaybackCursor | null>(null);
+	const [programs, setPrograms] = useState<number[]>([]);
 	const monacoRef = useRef<Monaco | null>(null);
 	const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+	const playerRef = useRef<TabPlayer | null>(null);
+	if (!playerRef.current) playerRef.current = new TabPlayer();
+
+	const parsed = useMemo(() => parse(source), [source]);
+	const tracks = useMemo(() => parsed.score?.tracks ?? [], [parsed]);
+
+	// Keep one instrument program per track, preserving picks across edits by index.
+	useEffect(() => {
+		setPrograms((prev) => tracks.map((t, i) => prev[i] ?? defaultProgram(t.instrument)));
+	}, [tracks]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -25,6 +41,13 @@ export function Playground() {
 			if (decoded) setSource(decoded);
 		}
 	}, []);
+
+	useEffect(() => () => playerRef.current?.stop(), []);
+
+	const flash = (message: string) => {
+		setNotice(message);
+		setTimeout(() => setNotice(null), 2500);
+	};
 
 	const refreshMarkers = useCallback((value: string) => {
 		const monaco = monacoRef.current;
@@ -51,15 +74,59 @@ export function Playground() {
 		setTimeout(() => setShared(false), 1500);
 	};
 
-	const [exportError, setExportError] = useState<string | null>(null);
+	const playablesScore = () => {
+		if (!parsed.score || parsed.diagnostics.some((d) => d.severity === 'error')) {
+			flash('Fix the errors in the editor first.');
+			return null;
+		}
+		return parsed.score;
+	};
 
-	const handleExport = (format: 'midi' | 'musicxml') => {
-		const { score, diagnostics } = parse(source);
-		if (!score || diagnostics.some((d) => d.severity === 'error')) {
-			setExportError('Fix the errors in the editor before exporting.');
-			setTimeout(() => setExportError(null), 2500);
+	const handlePlay = async () => {
+		if (playing) {
+			playerRef.current?.stop();
+			setPlaying(false);
+			setCursor(null);
 			return;
 		}
+		const score = playablesScore();
+		if (!score) return;
+		const timeline = buildTimeline(score);
+		if (timeline.events.length === 0 || timeline.barSeconds === 0) {
+			flash('Nothing to play yet.');
+			return;
+		}
+		setPlaying(true);
+		await playerRef.current?.play(
+			timeline,
+			tracks.map((t, i) => programs[i] ?? defaultProgram(t.instrument)),
+			(elapsed) => {
+				const idx = Math.min(Math.floor(elapsed / timeline.barSeconds), timeline.measureCount - 1);
+				const progress = Math.min(
+					1,
+					Math.max(0, (elapsed - idx * timeline.barSeconds) / timeline.barSeconds),
+				);
+				setCursor({ measureIndex: Math.max(0, idx), progress });
+			},
+			() => {
+				setPlaying(false);
+				setCursor(null);
+			},
+		);
+	};
+
+	const handleInstrument = (trackIndex: number, program: number) => {
+		setPrograms((prev) => {
+			const next = [...prev];
+			next[trackIndex] = program;
+			return next;
+		});
+		playerRef.current?.setProgram(trackIndex, program);
+	};
+
+	const handleExport = (format: 'midi' | 'musicxml') => {
+		const score = playablesScore();
+		if (!score) return;
 		const slug = (score.metadata.title ?? 'tab').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'tab';
 		let blob: Blob;
 		let ext: string;
@@ -85,11 +152,15 @@ export function Playground() {
 
 	return (
 		<div className="flex h-[calc(100vh-3.5rem)] flex-col">
-			<div className="flex items-center justify-between border-b border-border px-4 py-2">
+			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
 				<span className="text-sm text-muted-foreground">
-					{exportError ?? 'Edit Fretdown on the left; the tab renders live on the right.'}
+					{notice ?? 'Edit Fretdown on the left; the tab renders live on the right.'}
 				</span>
 				<div className="flex items-center gap-2">
+					<Button size="sm" onClick={handlePlay}>
+						{playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+						{playing ? 'Stop' : 'Play'}
+					</Button>
 					<Button size="sm" variant="outline" onClick={() => handleExport('midi')}>
 						<Download className="h-4 w-4" />
 						MIDI
@@ -104,6 +175,29 @@ export function Playground() {
 					</Button>
 				</div>
 			</div>
+
+			{tracks.length > 0 && (
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2 text-sm">
+					<span className="text-muted-foreground">Instruments:</span>
+					{tracks.map((track, i) => (
+						<label key={`${track.name}-${i}`} className="flex items-center gap-1.5">
+							<span className="font-medium">{track.name}</span>
+							<select
+								className="rounded border border-border bg-background px-1.5 py-0.5 text-sm"
+								value={programs[i] ?? defaultProgram(track.instrument)}
+								onChange={(e) => handleInstrument(i, Number(e.target.value))}
+							>
+								{GM_INSTRUMENTS.map((name, prog) => (
+									<option key={name} value={prog}>
+										{name}
+									</option>
+								))}
+							</select>
+						</label>
+					))}
+				</div>
+			)}
+
 			<PanelGroup direction="horizontal" className="flex-1">
 				<Panel defaultSize={45} minSize={25}>
 					<Editor
@@ -129,7 +223,7 @@ export function Playground() {
 				<PanelResizeHandle className="w-1.5 bg-border transition-colors hover:bg-accent" />
 				<Panel defaultSize={55} minSize={30}>
 					<div className="h-full overflow-auto bg-muted/30 p-4">
-						<TabPreview source={source} />
+						<TabPreview source={source} cursor={cursor} />
 					</div>
 				</Panel>
 			</PanelGroup>
