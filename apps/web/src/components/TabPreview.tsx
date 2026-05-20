@@ -87,7 +87,13 @@ export function TabPreview({
 								>
 									<div
 										className="absolute top-0 bottom-0 w-0.5 bg-accent"
-										style={{ left: Math.min(m.width, m.width * cursor.progress) }}
+										style={{
+											// Sweep from where notes begin (after clef/time sig), not the box edge.
+											left: Math.min(
+												m.width,
+												m.noteX - m.x + (m.x + m.width - m.noteX) * cursor.progress,
+											),
+										}}
 									/>
 								</div>
 							))}

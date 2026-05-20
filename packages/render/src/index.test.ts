@@ -113,4 +113,18 @@ describe('renderToSVG', () => {
 		// six guitar strings → box spans five line gaps
 		expect(layout.measures[0]?.height).toBe(5 * 13);
 	});
+
+	it('reports noteX after the clef/time signature so a cursor can align to the notes', () => {
+		const score = scoreFrom(SIMPLE_GUITAR);
+		const layout = computeLayout(score, { width: 600, measuresPerLine: 2 });
+		const first = layout.measures[0];
+		const svg = renderToSVG(score, { width: 600, measuresPerLine: 2 });
+		const firstNoteX = Number(
+			svg.match(/<g class="vf-tabnote"[^>]*>[\s\S]*?<text stroke="none" x="([\d.]+)"/)?.[1],
+		);
+		// notes begin well right of the box edge, just left of the first rendered notehead
+		expect(first?.noteX).toBeGreaterThan(first?.x ?? 0);
+		expect(first?.noteX).toBeLessThanOrEqual(firstNoteX);
+		expect(firstNoteX - (first?.noteX ?? 0)).toBeLessThan(20);
+	});
 });

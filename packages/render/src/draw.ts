@@ -157,6 +157,8 @@ export interface MeasureBox {
 	y: number;
 	width: number;
 	height: number;
+	/** X where notes begin (after the clef/time signature), for aligning a playback cursor. */
+	noteX: number;
 }
 
 export interface ScoreLayout {
@@ -180,6 +182,11 @@ export function computeLayout(score: Score, options: RenderOptions = {}): ScoreL
 	layout.tracks.forEach((tp, trackIndex) => {
 		const height = (tp.numLines - 1) * LINE_HEIGHT_PER_STRING;
 		tp.measures.forEach((mp, measureIndex) => {
+			// Mirror drawTrack's stave so getNoteStartX() matches the rendered note region.
+			const stave = new TabStave(mp.x, mp.y, mp.width, { num_lines: tp.numLines });
+			if (mp.isFirstInRow) stave.addClef('tab');
+			if (mp.showMeta) stave.addTimeSignature(`${tp.numerator}/${tp.denominator}`);
+			stave.format();
 			measures.push({
 				trackIndex,
 				measureIndex,
@@ -187,6 +194,7 @@ export function computeLayout(score: Score, options: RenderOptions = {}): ScoreL
 				y: (mp.y + STAVE_TOP_OFFSET) * scale,
 				width: mp.width * scale,
 				height: height * scale,
+				noteX: stave.getNoteStartX() * scale,
 			});
 		});
 	});
