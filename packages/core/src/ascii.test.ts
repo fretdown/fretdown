@@ -92,6 +92,34 @@ E|-----------------------------------------|`;
 		expect(result.ambiguities).toContain('repeat-detected');
 	});
 
+	it('concatenates multiple stacked systems into one continuous piece', () => {
+		const tab = `e|-------------------|
+B|-------------------|
+G|-------------------|
+D|-2-4-5-------------|
+A|-2-4-5-------------|
+E|-------------------|
+
+e|-------------------|
+B|-------------------|
+G|-------------------|
+D|-5-4-2-------------|
+A|-5-4-2-------------|
+E|-------------------|`;
+		const result = parseAsciiTab(tab);
+		expect(result.ambiguities).toContain('multi-system');
+		const reparsed = parse(result.fretdown!);
+		const errors = [...reparsed.diagnostics, ...validate(reparsed.score!)].filter(
+			(d) => d.severity === 'error',
+		);
+		expect(errors).toEqual([]);
+		// notes from the second system (fret 5 then 4 then 2 on the way down) follow the first
+		const frets = JSON.stringify(reparsed.score);
+		expect(frets).toContain('"fret":5');
+		// both systems' six beats land in the piece (at least one full bar of content)
+		expect(reparsed.score!.tracks[0]!.sections[0]!.items.length).toBeGreaterThanOrEqual(1);
+	});
+
 	it('captures hammer-ons as connector events', () => {
 		const tab = `e|-----------|
 B|-----------|

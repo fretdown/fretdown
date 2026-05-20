@@ -28,39 +28,37 @@ export function parseAsciiTab(text: string): AsciiResult {
 	const ambiguities: string[] = [];
 	const rawLines = text.split('\n');
 
-	const group = findTabBlock(rawLines);
-	if (group.length < 2) {
+	const groups = findTabBlocks(rawLines);
+	if (groups.length === 0) {
 		return { score: null, fretdown: null, confidence: 0, ambiguities: ['no-tab-block-found'] };
 	}
 
-	const stringCount = group.length;
+	// Tabs usually stack several systems (line groups) of the same string count — play them
+	// back to back. The most common group size wins; odd-sized groups are skipped.
+	const stringCount = mode(groups.map((g) => g.length));
+	const systems = groups.filter((g) => g.length === stringCount);
+	if (systems.length > 1) ambiguities.push('multi-system');
+
 	const tuningInfo = INSTRUMENT_BY_STRINGS[stringCount];
 	if (!tuningInfo) ambiguities.push('unusual-string-count');
 	ambiguities.push('rhythm-approximated', 'tuning-guessed');
 
-	// Keep only the bar-delimited region: from the first '|' to the last '|'. This drops the
-	// string label and any trailing annotation like "(6x)" that would be misread as notes.
-	const bodies = group.map((line) => {
-		const first = line.indexOf('|');
-		if (first < 0) return line;
-		const last = line.lastIndexOf('|');
-		return last > first ? line.slice(first, last + 1) : line.slice(first);
-	});
-
 	let hasConnectors = false;
-	const perString: LineToken[][] = bodies.map((body) => {
-		const tokens = tokenizeLine(body);
-		if (tokens.some((t) => t.connector)) hasConnectors = true;
-		return tokens;
+	const onsets = systems.flatMap((group) => {
+		const perString = trimBodies(group).map((body) => {
+			const tokens = tokenizeLine(body);
+			if (tokens.some((t) => t.connector)) hasConnectors = true;
+			return tokens;
+		});
+		return systemEvents(perString, stringCount);
 	});
 	if (hasConnectors) ambiguities.push('techniques-approximated');
 
-	const barCols = barlineColumns(bodies);
-	// 4/4 default → 8 eighth notes per bar. Notes are chunked into bars of this size.
-	const beats = assembleBeats(perString, stringCount, 8);
+	// 4/4 default → 8 eighth notes per bar.
+	const beats = layoutBars(onsets, 8);
 
-	// A trailing "(6x)" / "x6" annotation means the riff repeats — wrap it in a repeat.
-	const repeatTimes = detectRepeat(group);
+	// A trailing "(6x)" / "x6" annotation means the riff repeats — wrap the whole thing.
+	const repeatTimes = detectRepeat(rawLines);
 	if (repeatTimes && beats.length > 0) {
 		const first = beats[0] as { repeatStart?: boolean };
 		const last = beats[beats.length - 1] as { repeatEnd?: { times: number } };
@@ -87,17 +85,17 @@ export function parseAsciiTab(text: string): AsciiResult {
 	let confidence = 0.8;
 	if (!tuningInfo) confidence -= 0.2;
 	if (hasConnectors) confidence -= 0.1;
-	if (barCols.length === 0) confidence -= 0.1;
 	confidence = Math.max(0.1, Math.min(0.9, confidence));
 
 	return { score, fretdown: serialize(score), confidence, ambiguities };
 }
 
-function findTabBlock(lines: string[]): string[] {
-	let best: string[] = [];
+/** Finds every group of consecutive tab lines (each a "system"); blank/prose lines separate. */
+function findTabBlocks(lines: string[]): string[][] {
+	const groups: string[][] = [];
 	let current: string[] = [];
 	const flush = () => {
-		if (current.length > best.length) best = current;
+		if (current.length >= 2) groups.push(current);
 		current = [];
 	};
 	for (const line of lines) {
@@ -105,7 +103,34 @@ function findTabBlock(lines: string[]): string[] {
 		else flush();
 	}
 	flush();
+	return groups;
+}
+
+/** The most frequent value (used to pick the dominant string count across systems). */
+function mode(nums: number[]): number {
+	const counts = new Map<number, number>();
+	let best = nums[0] ?? 6;
+	let bestCount = 0;
+	for (const n of nums) {
+		const c = (counts.get(n) ?? 0) + 1;
+		counts.set(n, c);
+		if (c > bestCount) {
+			bestCount = c;
+			best = n;
+		}
+	}
 	return best;
+}
+
+/** Keeps only the bar-delimited region of each line (first '|' to last '|'), dropping the
+ * string label and any trailing annotation like "(6x)" that would be misread as notes. */
+function trimBodies(group: string[]): string[] {
+	return group.map((line) => {
+		const first = line.indexOf('|');
+		if (first < 0) return line;
+		const last = line.lastIndexOf('|');
+		return last > first ? line.slice(first, last + 1) : line.slice(first);
+	});
 }
 
 function isTabLine(line: string): boolean {
@@ -180,21 +205,15 @@ function durationsForUnits(units: number): Duration[] {
 	return out;
 }
 
-function barlineColumns(bodies: string[]): number[] {
-	const width = Math.max(...bodies.map((b) => b.length));
-	const cols: number[] = [];
-	for (let c = 0; c < width; c++) {
-		if (bodies.every((b) => b[c] === '|')) cols.push(c);
-	}
-	return cols;
+/** A single note/chord onset: how long it's held (in eighth units) and how to build its beat. */
+interface Onset {
+	units: number;
+	build: (duration: Duration) => Beat;
 }
 
-function assembleBeats(
-	perString: LineToken[][],
-	stringCount: number,
-	eighthsPerBar: number,
-): Score['tracks'][number]['sections'][number]['items'] {
-	// Attach connector tokens to the previous note on the same string; collect plain notes by column.
+/** Turns one system's tokens into ordered onsets, inferring each note's length from spacing. */
+function systemEvents(perString: LineToken[][], stringCount: number): Onset[] {
+	// Attach connector tokens to the previous note on the same string; collect notes by column.
 	const noteByStringCol = new Map<string, Note>();
 	const colSet = new Set<number>();
 
@@ -223,7 +242,7 @@ function assembleBeats(
 	const cols = [...colSet].sort((a, b) => a - b);
 	if (cols.length === 0) return [];
 
-	const beatAt = (c: number, duration: Duration): Beat => {
+	const makeBeat = (c: number, duration: Duration): Beat => {
 		const notes: Note[] = [];
 		for (let str = 1; str <= stringCount; str++) {
 			const n = noteByStringCol.get(`${c}:${str}`);
@@ -235,20 +254,28 @@ function assembleBeats(
 		return { kind: 'chord', notes, duration, location: zero() };
 	};
 
-	// Infer rhythm from horizontal spacing: the tightest gap between notes is one eighth, and
-	// a note is held until the next note starts. Wider gaps → longer notes.
+	// Infer rhythm from horizontal spacing: the tightest gap between notes is one eighth, and a
+	// note is held until the next note starts, so wider gaps become longer notes.
 	const gaps: number[] = [];
-	for (let i = 0; i < cols.length - 1; i++)
+	for (let i = 0; i < cols.length - 1; i++) {
 		gaps.push((cols[i + 1] as number) - (cols[i] as number));
+	}
 	const unit = gaps.length > 0 ? Math.max(1, Math.min(...gaps)) : 1;
-	const lengths = cols.map((c, i) =>
-		i < cols.length - 1
-			? Math.max(1, Math.min(eighthsPerBar, Math.round(((cols[i + 1] as number) - c) / unit)))
-			: 1,
-	);
+	return cols.map((c, i) => ({
+		units:
+			i < cols.length - 1
+				? Math.max(1, Math.min(8, Math.round(((cols[i + 1] as number) - c) / unit)))
+				: 1,
+		build: (duration: Duration) => makeBeat(c, duration),
+	}));
+}
 
-	// Lay the held notes onto bars, splitting across barlines and padding the last bar with rests.
-	const items: ReturnType<typeof assembleBeats> = [];
+/** Lays a stream of held onsets onto bars, splitting across barlines and rest-padding the last. */
+function layoutBars(
+	onsets: Onset[],
+	eighthsPerBar: number,
+): Score['tracks'][number]['sections'][number]['items'] {
+	const items: ReturnType<typeof layoutBars> = [];
 	let beats: Beat[] = [];
 	let remaining = eighthsPerBar;
 	const closeBar = () => {
@@ -257,16 +284,16 @@ function assembleBeats(
 		remaining = eighthsPerBar;
 	};
 
-	cols.forEach((c, i) => {
-		let units = lengths[i] as number;
+	for (const onset of onsets) {
+		let units = onset.units;
 		while (units > 0) {
 			if (remaining === 0) closeBar();
 			const take = Math.min(units, remaining);
-			for (const duration of durationsForUnits(take)) beats.push(beatAt(c, duration));
+			for (const duration of durationsForUnits(take)) beats.push(onset.build(duration));
 			units -= take;
 			remaining -= take;
 		}
-	});
+	}
 	if (beats.length > 0) {
 		for (const duration of durationsForUnits(remaining)) {
 			beats.push({ kind: 'rest', duration, location: zero() });
