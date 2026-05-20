@@ -22,9 +22,11 @@
 	},
 	"dependencies": {
 		"@fretdown/core": "workspace:*",
+		"jsdom": "^25.0.1",
 		"vexflow": "^4.2.5"
 	},
 	"devDependencies": {
+		"@types/jsdom": "^21.1.7",
 		"tsup": "^8.3.5",
 		"typescript": "^5.7.2",
 		"vitest": "^2.1.8"

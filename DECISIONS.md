@@ -33,3 +33,11 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **Sub-rules return values rather than mutating passed-in ARGS** — ARGS are undefined during Chevrotain's recording phase, which would crash action code; returning partials and merging in the caller avoids it.
 - **Measure-fill checked with float fractions of a whole note + epsilon tolerance** — exact for dyadic durations and close enough for tuplet ratios (2/3, 4/5) without a rational-number dependency.
 - **No `composite`/project-references in tsconfigs** — tsup's `.d.ts` rollup conflicts with composite's "all files must be listed"; each package typechecks independently via its own include.
+
+## Render
+
+- **Headless rendering via jsdom with stubbed SVG text metrics** — VexFlow's SVG backend wants a DOM and `getBBox`; jsdom plus a constant-size `getBBox`/`getComputedTextLength` stub yields deterministic SVG (only sub-pixel text placement is approximate, which is fine for snapshots).
+- **`TabStave`/`TabNote` with `num_lines` from the tuning** — Fretdown is tab-native, so VexFlow's tab primitives map directly; 4-line bass vs 6-line guitar driven by string count.
+- **A connector chain (e.g. `s5f2h3`) is one beat → render the first fret + a technique annotation; bends use VexFlow's `Bend`** — a `TabNote` is a single attack, so multi-fret transitions within one beat are shown as annotations (`h3`, `/3`, `pm`) rather than multiple noteheads. **Known v1 limitation**, noted for review.
+- **Voices use SOFT mode** — the core validator already guarantees measures are well-formed, so strict tick-counting (which dotted/tuplet face-values complicate) isn't needed for layout.
+- **Rests render as VexFlow `GhostNote`** — tab has no standard rest glyph; a ghost preserves spacing.
