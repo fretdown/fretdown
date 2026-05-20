@@ -8,9 +8,9 @@ import { defaultProgram } from '@/lib/gm';
 import { TabPlayer, buildTimeline } from '@/lib/playback';
 import { SAMPLES } from '@/lib/samples';
 import { decodeSource, encodeSource } from '@/lib/share';
-import { parse, toMidi, toMusicXML } from '@fretdown/core';
+import { parse, parseAsciiTab, toMidi, toMusicXML } from '@fretdown/core';
 import Editor, { type Monaco, type OnMount } from '@monaco-editor/react';
-import { Check, Download, Play, Share2, Square } from 'lucide-react';
+import { Check, Download, FileInput, Play, Share2, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
@@ -22,6 +22,9 @@ export function Playground() {
 	const [cursor, setCursor] = useState<PlaybackCursor | null>(null);
 	// Which track to play: 'all' (every track together) or a single track index (solo).
 	const [selected, setSelected] = useState<number | 'all'>('all');
+	const [importOpen, setImportOpen] = useState(false);
+	const [asciiText, setAsciiText] = useState('');
+	const [importError, setImportError] = useState<string | null>(null);
 	const monacoRef = useRef<Monaco | null>(null);
 	const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 	const playerRef = useRef<TabPlayer | null>(null);
@@ -131,17 +134,38 @@ export function Playground() {
 
 	const currentSample = SAMPLES.findIndex((s) => s.source === source);
 
-	const loadSample = (index: number) => {
-		const sample = SAMPLES[index];
-		if (!sample) return;
+	const loadIntoEditor = (next: string) => {
 		playerRef.current?.stop();
 		setPlaying(false);
 		setCursor(null);
 		setSelected('all');
-		setSource(sample.source);
-		refreshMarkers(sample.source);
-		// Drop any shared-link hash so this clearly reflects the chosen sample.
+		setSource(next);
+		refreshMarkers(next);
 		window.history.replaceState(null, '', window.location.pathname);
+	};
+
+	const loadSample = (index: number) => {
+		const sample = SAMPLES[index];
+		if (sample) loadIntoEditor(sample.source);
+	};
+
+	const handleImport = () => {
+		const result = parseAsciiTab(asciiText);
+		if (!result.fretdown) {
+			setImportError('Couldn’t find a tab block. Paste lines like  e|--0--3--5--|');
+			return;
+		}
+		const pct = Math.round(result.confidence * 100);
+		const header = [
+			`# Imported from ASCII tab — approximate (${pct}% confidence)`,
+			`# Review: ${result.ambiguities.join(', ')}`,
+			'',
+		].join('\n');
+		loadIntoEditor(header + result.fretdown);
+		setImportOpen(false);
+		setAsciiText('');
+		setImportError(null);
+		flash(`Imported ASCII tab (${pct}% confidence) — rhythm is approximate, review it.`);
 	};
 
 	const handleExport = (format: 'midi' | 'musicxml') => {
@@ -218,6 +242,17 @@ export function Playground() {
 							))}
 						</select>
 					)}
+					<Button
+						size="sm"
+						variant="outline"
+						onClick={() => {
+							setImportError(null);
+							setImportOpen(true);
+						}}
+					>
+						<FileInput className="h-4 w-4" />
+						Import
+					</Button>
 					<Button size="sm" variant="outline" onClick={() => handleExport('midi')}>
 						<Download className="h-4 w-4" />
 						MIDI
@@ -262,6 +297,41 @@ export function Playground() {
 					</div>
 				</Panel>
 			</PanelGroup>
+
+			{importOpen && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+					<button
+						type="button"
+						aria-label="Close import dialog"
+						className="absolute inset-0 cursor-default"
+						onClick={() => setImportOpen(false)}
+					/>
+					<div className="relative w-full max-w-2xl rounded-lg border border-border bg-card p-5 shadow-xl">
+						<h2 className="text-lg font-semibold">Import ASCII tab</h2>
+						<p className="mt-1 text-sm text-muted-foreground">
+							Paste a legacy ASCII guitar/bass tab. Conversion is best-effort — the rhythm is
+							approximated and tuning is guessed, so review the result.
+						</p>
+						<textarea
+							className="mt-3 h-56 w-full resize-none rounded border border-border bg-background p-2 font-mono text-sm"
+							placeholder={
+								'e|--0--3--5--3--0-----------|\nB|-----------------1--3--1--|\nG|--------------------------|\nD|--------------------------|\nA|--------------------------|\nE|--------------------------|'
+							}
+							value={asciiText}
+							onChange={(e) => setAsciiText(e.target.value)}
+						/>
+						{importError && <p className="mt-2 text-sm text-red-500">{importError}</p>}
+						<div className="mt-4 flex justify-end gap-2">
+							<Button size="sm" variant="outline" onClick={() => setImportOpen(false)}>
+								Cancel
+							</Button>
+							<Button size="sm" onClick={handleImport} disabled={asciiText.trim().length === 0}>
+								Convert &amp; insert
+							</Button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }
