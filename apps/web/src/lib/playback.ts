@@ -7,8 +7,6 @@ import {
 	noteToMidi,
 } from '@fretdown/core';
 
-const TRANSITION_CONNECTORS = new Set(['h', 'p', '/', '\\']);
-
 /** One scheduled sound: a set of simultaneous MIDI pitches on a channel at a time. */
 export interface PlayEvent {
 	channel: number;
@@ -119,9 +117,9 @@ function chainPitches(track: Track, note: Note): number[] {
 	if (base === null) return [];
 	const fret = note.fret ?? 0;
 	const pitches = [base];
-	for (const event of note.events) {
-		if (TRANSITION_CONNECTORS.has(event.connector)) pitches.push(base + (event.fret - fret));
-	}
+	// Every connector (hammer/pull/slide/bend/release) moves to a target fret — sound it, so
+	// bends and slides carry the melody instead of only the starting note being heard.
+	for (const event of note.events) pitches.push(base + (event.fret - fret));
 	return pitches;
 }
 

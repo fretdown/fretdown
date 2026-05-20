@@ -362,7 +362,19 @@ function tryExpandChain(
 
 	const connections: Connection[] = [];
 	note.events.forEach((event, i) => {
-		const kind = CONNECTOR_KIND[event.connector];
+		const from = frets[i] as number;
+		const to = frets[i + 1] as number;
+		// Slide direction follows the actual fret movement, not just the '/' vs '\' symbol.
+		const kind: Connection['kind'] | undefined =
+			event.connector === 'h'
+				? 'hammer'
+				: event.connector === 'p'
+					? 'pull'
+					: event.connector === '/' || event.connector === '\\'
+						? to >= from
+							? 'slide-up'
+							: 'slide-down'
+						: undefined;
 		const first = notes[i];
 		const last = notes[i + 1];
 		if (kind && first && last) connections.push({ kind, first, last });

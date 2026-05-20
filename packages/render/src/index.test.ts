@@ -95,6 +95,17 @@ describe('renderToSVG', () => {
 		expect(svg).not.toContain('/5');
 	});
 
+	it('draws a downward slide when the target fret is lower', () => {
+		// a slide from fret 7 down to fret 3 should render (direction taken from the frets)
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f7/3:2 s2f3:2 |\n'),
+			{ width: 600 },
+		);
+		expect(svg).toContain('sl.');
+		expect(svg).toContain('>7<');
+		expect(svg).toContain('>3<');
+	});
+
 	it('labels each string with its open-note letter in the left gutter', () => {
 		const svg = renderToSVG(scoreFrom(SIMPLE_GUITAR), { width: 600 });
 		const labels = [...svg.matchAll(/<text[^>]*x="12"[^>]*>([A-G])<\/text>/g)].map((m) => m[1]);

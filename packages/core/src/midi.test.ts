@@ -67,6 +67,13 @@ describe('toMidi', () => {
 		expect(indexOf(bytes, [0x90, 60])).toBeGreaterThan(0);
 		expect(indexOf(bytes, [0x90, 62])).toBeGreaterThan(0);
 	});
+
+	it('sounds the target of a bend (and release), not just the starting note', () => {
+		// s3f5 bend up to fret 7, release back to 5 → 60, 62, 60 should all play
+		const bytes = toMidi(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5b7r5:4 s3f5:2 |\n'));
+		expect(indexOf(bytes, [0x90, 60])).toBeGreaterThan(0);
+		expect(indexOf(bytes, [0x90, 62])).toBeGreaterThan(0);
+	});
 });
 
 function indexOf(haystack: Uint8Array, needle: number[]): number {

@@ -50,6 +50,8 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **Pitch = `tuning[length − string]` open pitch + fret + capo** — the tuning array is low→high (highest string number maps to `s1`), so the open pitch for `note.string` is indexed from the end; capo raises the sounding pitch while tab fret numbers stay relative to it.
 - **Hammer/pull/slide chains play/notate their target frets, not just the start** — MIDI subdivides the beat across the chain with float steps (any chain length); MusicXML reuses the renderer's power-of-two subdivision rule and connects notes with `<slur>`/`<slide>`. Keeps audio/notation consistent with the SVG.
 - **Dead notes are silent in MIDI and `<unpitched>` in MusicXML; bends play/notate the start fret** — a muted string has no pitch, and MusicXML bend markup is out of scope for v1.
+- **MIDI/playback sound every connector's target fret, including bends and releases** — a `b`/`r` event has a target fret like a hammer/pull does, so it's played as a sequential pitch (re-articulated, no pitch-bend gliding yet); otherwise bent notes carried no melody. The renderer still draws bends as a `Bend` arrow.
+- **Slide render direction comes from the fret movement, not the `/`/`\` glyph** — `to ≥ from` draws slide-up, else slide-down, so a slide always slopes the way it actually moves.
 
 ## Editor tooling
 

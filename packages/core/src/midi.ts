@@ -3,7 +3,6 @@ import { noteToMidi } from './tuning.js';
 
 /** Pulses per quarter note. 480 keeps every supported duration (incl. triplets) integral. */
 const PPQ = 480;
-const TRANSITION_CONNECTORS = new Set(['h', 'p', '/', '\\']);
 
 /**
  * Serializes a score to a Standard MIDI File (format 1): one conductor track carrying
@@ -116,9 +115,9 @@ function chainPitches(track: Track, note: Note): number[] {
 	if (base === null) return [];
 	const open = base - (note.fret ?? 0);
 	const pitches = [base];
-	for (const event of note.events) {
-		if (TRANSITION_CONNECTORS.has(event.connector)) pitches.push(open + event.fret);
-	}
+	// Every connector (hammer/pull/slide/bend/release) targets a fret — sound it so bends and
+	// slides carry the melody rather than only the starting note being played.
+	for (const event of note.events) pitches.push(open + event.fret);
 	return pitches;
 }
 
