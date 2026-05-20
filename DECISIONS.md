@@ -41,3 +41,12 @@ A running log of design decisions and their rationale. Each entry is one line.
 - **A connector chain (e.g. `s5f2h3`) is one beat → render the first fret + a technique annotation; bends use VexFlow's `Bend`** — a `TabNote` is a single attack, so multi-fret transitions within one beat are shown as annotations (`h3`, `/3`, `pm`) rather than multiple noteheads. **Known v1 limitation**, noted for review.
 - **Voices use SOFT mode** — the core validator already guarantees measures are well-formed, so strict tick-counting (which dotted/tuplet face-values complicate) isn't needed for layout.
 - **Rests render as VexFlow `GhostNote`** — tab has no standard rest glyph; a ghost preserves spacing.
+
+## Web playground
+
+- **`/spec` uses `react-markdown` + `remark-gfm`, not MDX** — the locked stack named MDX, but the spec's EBNF (`grammar.md`) is full of `{ }` and `< >` that MDX parses as JSX/expressions and chokes on. react-markdown renders the external `.md` files verbatim and still supports the required live-rendering of `@track` examples via a custom `pre` renderer. **Deviation from locked stack — flagged for review.**
+- **Live tab examples only render fences containing `@track`** — many spec snippets are partial (a single measure) and aren't complete scores; rendering those would show spurious errors, so only complete documents get a live preview.
+- **Tailwind v3 + hand-written shadcn-style primitives (Button/Card)** — avoids the interactive `shadcn` CLI init (and its network/registry calls) while keeping the same cva + Radix-flavored component shape.
+- **`@fretdown/render/browser` subpath import in the web app** — the playground renders client-side with VexFlow against the real DOM, never bundling jsdom.
+- **Share links base64url-encode the source into the location hash** — no backend needed; round-trips UTF-8 safely.
+- **Monaco loaded via `next/dynamic` with `ssr: false`** — the editor is browser-only; the `/play` route ships a tiny shell and lazy-loads the editor.
