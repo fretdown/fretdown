@@ -2,7 +2,7 @@
 
 import { type Diagnostic, expandRepeats, parse, validate } from '@fretdown/core';
 import { computeLayout, renderInto } from '@fretdown/render/browser';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /** Where the playback cursor currently sits, in measure-relative terms. */
 export interface PlaybackCursor {
@@ -15,6 +15,7 @@ export interface PlaybackCursor {
 
 export interface TabPreviewProps {
 	source: string;
+	/** Maximum width; the tab shrinks to fit narrower containers. */
 	width?: number;
 	measuresPerLine?: number;
 	cursor?: PlaybackCursor | null;
@@ -22,11 +23,13 @@ export interface TabPreviewProps {
 
 export function TabPreview({
 	source,
-	width = 820,
+	width = 900,
 	measuresPerLine = 2,
 	cursor = null,
 }: TabPreviewProps) {
+	const wrapRef = useRef<HTMLDivElement>(null);
 	const ref = useRef<HTMLDivElement>(null);
+	const [available, setAvailable] = useState<number>(width);
 
 	const { score, errors } = useMemo(() => {
 		const { score, diagnostics } = parse(source);
@@ -35,13 +38,32 @@ export function TabPreview({
 		return { score, errors: all.filter((d) => d.severity === 'error') };
 	}, [source]);
 
+	// Reflow the tab to fit the container: shrink to its width, dropping to one
+	// measure per line on narrow screens. The cursor overlay below uses the same
+	// values so its boxes line up with the rendered SVG.
+	const renderWidth = Math.max(280, Math.min(width, Math.floor(available)));
+	const lines = renderWidth < 520 ? 1 : measuresPerLine;
+
 	// Expand repeats so a `|: … :|xN` riff is shown (and measured) as N literal repetitions.
 	const playable = useMemo(() => (score ? expandRepeats(score) : null), [score]);
 
 	const layout = useMemo(
-		() => (playable ? computeLayout(playable, { width, measuresPerLine }) : null),
-		[playable, width, measuresPerLine],
+		() =>
+			playable ? computeLayout(playable, { width: renderWidth, measuresPerLine: lines }) : null,
+		[playable, renderWidth, lines],
 	);
+
+	// Track the container's width so the tab reflows to fit any screen.
+	useEffect(() => {
+		const el = wrapRef.current;
+		if (!el || typeof ResizeObserver === 'undefined') return;
+		const observer = new ResizeObserver((entries) => {
+			const w = entries[0]?.contentRect.width;
+			if (w && w > 0) setAvailable(w);
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
 
 	useEffect(() => {
 		const el = ref.current;
@@ -49,13 +71,13 @@ export function TabPreview({
 		el.innerHTML = '';
 		if (!playable) return;
 		try {
-			renderInto(el, playable, { width, measuresPerLine });
+			renderInto(el, playable, { width: renderWidth, measuresPerLine: lines });
 		} catch (err) {
 			el.innerHTML = `<p class="text-sm text-red-500">Render error: ${
 				err instanceof Error ? err.message : String(err)
 			}</p>`;
 		}
-	}, [playable, width, measuresPerLine]);
+	}, [playable, renderWidth, lines]);
 
 	const activeBoxes =
 		layout && cursor
@@ -67,11 +89,11 @@ export function TabPreview({
 			: [];
 
 	return (
-		<div className="space-y-3">
+		<div ref={wrapRef} className="w-full space-y-3">
 			{errors.length > 0 && (
 				<ul className="space-y-1 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
 					{errors.map((e, i) => (
-						<li key={`${e.code}-${i}`} className="font-mono">
+						<li key={`${e.code}-${i}`} className="break-words font-mono">
 							line {e.location.line}:{e.location.col} — {e.message}
 						</li>
 					))}

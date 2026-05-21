@@ -62,14 +62,18 @@ export function renderInto(
 	const renderer = new Renderer(element, Renderer.Backends.SVG);
 	const ctx = renderer.getContext();
 
+	// On narrow canvases, stack the artist/tempo under the title instead of to the right.
+	const stackMeta = width < 600 && Boolean(score.metadata.artist || score.metadata.tempo);
+	const headerTop = headerTopPadding(score, width);
+
 	// First pass: compute total height so we can size the canvas before drawing.
-	const layout = planLayout(score, width, measuresPerLine);
+	const layout = planLayout(score, width, measuresPerLine, headerTop);
 	const pxWidth = Math.ceil(width * scale);
 	const pxHeight = Math.ceil(layout.totalHeight * scale);
 	renderer.resize(pxWidth, pxHeight);
 	ctx.scale(scale, scale);
 
-	drawHeader(ctx, score, width);
+	drawHeader(ctx, score, width, stackMeta);
 	for (const trackPlan of layout.tracks) {
 		drawTrack(ctx, trackPlan);
 	}
@@ -100,9 +104,14 @@ interface Layout {
 	totalHeight: number;
 }
 
-function planLayout(score: Score, width: number, measuresPerLine: number): Layout {
+function planLayout(
+	score: Score,
+	width: number,
+	measuresPerLine: number,
+	topPadding: number,
+): Layout {
 	const tracks: TrackPlan[] = [];
-	let y = TOP_PADDING;
+	let y = topPadding;
 
 	for (const track of score.tracks) {
 		const numLines = Math.max(4, track.tuning.length || 6);
@@ -167,6 +176,12 @@ export interface ScoreLayout {
 	measures: MeasureBox[];
 }
 
+/** Top offset where staves begin, leaving room for the header (which stacks on narrow widths). */
+function headerTopPadding(score: Score, width: number): number {
+	const hasMeta = Boolean(score.metadata.artist || score.metadata.tempo);
+	return width < 600 && hasMeta ? 56 : TOP_PADDING;
+}
+
 /**
  * Computes the same measure layout {@link renderInto} draws, without rendering — so a host
  * (e.g. a playback cursor) can position overlays that line up with the produced SVG. Uses
@@ -176,7 +191,7 @@ export function computeLayout(score: Score, options: RenderOptions = {}): ScoreL
 	const width = options.width ?? 900;
 	const measuresPerLine = Math.max(1, options.measuresPerLine ?? 4);
 	const scale = options.scale ?? 1;
-	const layout = planLayout(score, width, measuresPerLine);
+	const layout = planLayout(score, width, measuresPerLine, headerTopPadding(score, width));
 
 	const measures: MeasureBox[] = [];
 	layout.tracks.forEach((tp, trackIndex) => {
@@ -206,7 +221,7 @@ export function computeLayout(score: Score, options: RenderOptions = {}): ScoreL
 	};
 }
 
-function drawHeader(ctx: RenderContext, score: Score, width: number): void {
+function drawHeader(ctx: RenderContext, score: Score, width: number, stackMeta: boolean): void {
 	const title = score.metadata.title ?? 'Untitled';
 	ctx.save();
 	ctx.setFont('Arial', 16, 'bold');
@@ -215,7 +230,11 @@ function drawHeader(ctx: RenderContext, score: Score, width: number): void {
 	const meta: string[] = [];
 	if (score.metadata.artist) meta.push(score.metadata.artist);
 	if (score.metadata.tempo) meta.push(`♩ = ${score.metadata.tempo}`);
-	if (meta.length > 0) ctx.fillText(meta.join('   '), width - MARGIN - 200, 20);
+	if (meta.length > 0) {
+		const text = meta.join('   ');
+		if (stackMeta) ctx.fillText(text, MARGIN, 38);
+		else ctx.fillText(text, width - MARGIN - 200, 20);
+	}
 	ctx.restore();
 }
 

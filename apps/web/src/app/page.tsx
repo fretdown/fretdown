@@ -37,32 +37,34 @@ const FEATURES = [
 
 export default function HomePage() {
 	return (
-		<main className="mx-auto max-w-5xl px-4 py-12">
+		<main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
 			<section className="text-center">
-				<h1 className="text-4xl font-bold sm:text-5xl">
+				<h1 className="text-3xl font-bold sm:text-5xl">
 					Markdown for <span className="text-accent">guitar &amp; bass</span> tabs
 				</h1>
-				<p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+				<p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground sm:text-base">
 					Fretdown is an open-source, plaintext notation format for fretted instruments. It is
 					git-friendly, deterministically parseable, and validator-backed.
 				</p>
-				<div className="mt-6 flex justify-center gap-3">
-					<Link href="/play">
-						<Button>Open the playground</Button>
+				<div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+					<Link href="/play" className="w-full sm:w-auto">
+						<Button className="w-full sm:w-auto">Open the playground</Button>
 					</Link>
-					<Link href="/spec">
-						<Button variant="outline">Read the spec</Button>
+					<Link href="/spec" className="w-full sm:w-auto">
+						<Button variant="outline" className="w-full sm:w-auto">
+							Read the spec
+						</Button>
 					</Link>
 				</div>
 			</section>
 
-			<section className="mt-12">
-				<Card className="p-4">
+			<section className="mt-10 sm:mt-12">
+				<Card className="p-2 sm:p-4">
 					<TabPreview source={EXAMPLE_SOURCE} width={900} measuresPerLine={2} />
 				</Card>
 			</section>
 
-			<section className="mt-12 grid gap-4 sm:grid-cols-2">
+			<section className="mt-10 grid gap-4 sm:mt-12 sm:grid-cols-2">
 				{FEATURES.map((f) => (
 					<Card key={f.title} className="p-5">
 						<h2 className="font-semibold text-accent">{f.title}</h2>
@@ -71,9 +73,9 @@ export default function HomePage() {
 				))}
 			</section>
 
-			<section className="mt-12">
+			<section className="mt-10 sm:mt-12">
 				<h2 className="text-xl font-semibold">Looks like this</h2>
-				<pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-sm">
+				<pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted p-3 text-xs sm:p-4 sm:text-sm">
 					<code>{`@title "Sunshine Riff"
 @tempo 120
 @time 4/4

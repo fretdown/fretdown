@@ -38,6 +38,11 @@ export function SpecMarkdown({ content }: { content: string }) {
 				remarkPlugins={[remarkGfm]}
 				components={{
 					pre: PreBlock,
+					table: ({ children }) => (
+						<div className="-mx-1 overflow-x-auto">
+							<table>{children}</table>
+						</div>
+					),
 					a: ({ href, children }) => {
 						const internal = href?.endsWith('.md');
 						return (

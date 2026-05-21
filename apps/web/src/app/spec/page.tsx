@@ -10,7 +10,7 @@ export const metadata = {
 export default function SpecPage() {
 	const docs = readSpec();
 	return (
-		<main className="mx-auto max-w-4xl px-4 py-10">
+		<main className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
 			{docs.map((doc) => (
 				<section key={doc.file} className="mb-8">
 					<SpecMarkdown content={doc.content} />

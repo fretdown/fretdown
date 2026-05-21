@@ -27,8 +27,11 @@ export const metadata: Metadata = {
 
 function Nav() {
 	return (
-		<header className="flex h-14 items-center justify-between border-b border-border px-4">
-			<Link href="/" className="flex items-center gap-2 font-mono text-lg font-bold">
+		<header className="flex h-14 items-center justify-between gap-2 border-b border-border px-3 sm:px-4">
+			<Link
+				href="/"
+				className="flex shrink-0 items-center gap-2 font-mono text-base font-bold sm:text-lg"
+			>
 				<svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
 					<rect width="32" height="32" rx="7" fill="#0f172a" />
 					<g stroke="#f97316" strokeWidth="1.4" strokeLinecap="round" opacity="0.55">
@@ -39,7 +42,7 @@ function Nav() {
 				</svg>
 				Fretdown
 			</Link>
-			<nav className="flex items-center gap-4 text-sm">
+			<nav className="flex items-center gap-3 text-sm sm:gap-4">
 				<Link href="/play" className="hover:text-accent">
 					Playground
 				</Link>
