@@ -25,6 +25,8 @@ export function Playground() {
 	const [importOpen, setImportOpen] = useState(false);
 	const [asciiText, setAsciiText] = useState('');
 	const [importError, setImportError] = useState<string | null>(null);
+	// Stack the editor above the preview on narrow screens; split side-by-side otherwise.
+	const [stacked, setStacked] = useState(false);
 	const monacoRef = useRef<Monaco | null>(null);
 	const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 	const playerRef = useRef<TabPlayer | null>(null);
@@ -48,6 +50,15 @@ export function Playground() {
 	}, []);
 
 	useEffect(() => () => playerRef.current?.stop(), []);
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		const mq = window.matchMedia('(max-width: 768px)');
+		const update = () => setStacked(mq.matches);
+		update();
+		mq.addEventListener('change', update);
+		return () => mq.removeEventListener('change', update);
+	}, []);
 
 	const flash = (message: string) => {
 		setNotice(message);
@@ -196,14 +207,14 @@ export function Playground() {
 	};
 
 	return (
-		<div className="flex h-[calc(100vh-3.5rem)] flex-col">
-			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+		<div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
 				<div className="flex items-center gap-2">
 					<label className="flex items-center gap-1.5 text-sm">
 						<span className="text-muted-foreground">Sample</span>
 						<select
 							aria-label="Load a sample"
-							className="rounded border border-border bg-background px-2 py-1 text-sm"
+							className="max-w-[42vw] rounded border border-border bg-background px-2 py-1 text-sm sm:max-w-none"
 							value={currentSample === -1 ? 'custom' : String(currentSample)}
 							onChange={(e) => {
 								if (e.target.value !== 'custom') loadSample(Number(e.target.value));
@@ -252,7 +263,7 @@ export function Playground() {
 						}}
 					>
 						<FileInput className="h-4 w-4" />
-						Import
+						<span className="hidden sm:inline">Import</span>
 					</Button>
 					<Button size="sm" variant="outline" onClick={() => handleExport('midi')}>
 						<Download className="h-4 w-4" />
@@ -264,13 +275,17 @@ export function Playground() {
 					</Button>
 					<Button size="sm" variant="outline" onClick={handleShare}>
 						{shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-						{shared ? 'Copied link' : 'Share'}
+						<span className="hidden sm:inline">{shared ? 'Copied link' : 'Share'}</span>
 					</Button>
 				</div>
 			</div>
 
-			<PanelGroup direction="horizontal" className="flex-1">
-				<Panel defaultSize={45} minSize={25}>
+			<PanelGroup
+				key={stacked ? 'vertical' : 'horizontal'}
+				direction={stacked ? 'vertical' : 'horizontal'}
+				className="flex-1"
+			>
+				<Panel defaultSize={stacked ? 50 : 45} minSize={20}>
 					<Editor
 						height="100%"
 						defaultLanguage={FRETDOWN_LANGUAGE_ID}
@@ -283,7 +298,7 @@ export function Playground() {
 							refreshMarkers(next);
 						}}
 						options={{
-							fontSize: 14,
+							fontSize: 13,
 							minimap: { enabled: false },
 							lineNumbers: 'on',
 							scrollBeyondLastLine: false,
@@ -291,9 +306,15 @@ export function Playground() {
 						}}
 					/>
 				</Panel>
-				<PanelResizeHandle className="w-1.5 bg-border transition-colors hover:bg-accent" />
-				<Panel defaultSize={55} minSize={30}>
-					<div className="h-full overflow-auto bg-muted/30 p-4">
+				<PanelResizeHandle
+					className={
+						stacked
+							? 'h-1.5 bg-border transition-colors hover:bg-accent'
+							: 'w-1.5 bg-border transition-colors hover:bg-accent'
+					}
+				/>
+				<Panel defaultSize={stacked ? 50 : 55} minSize={20}>
+					<div className="h-full overflow-auto bg-muted/30 p-3 sm:p-4">
 						<TabPreview source={source} cursor={cursor} />
 					</div>
 				</Panel>
