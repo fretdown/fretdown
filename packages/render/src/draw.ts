@@ -13,6 +13,7 @@ import {
 	TabStave,
 	TabTie,
 	Tuplet,
+	Vibrato,
 	Voice,
 } from 'vexflow';
 
@@ -428,9 +429,7 @@ function tryExpandChain(
 	});
 
 	const head = notes[0];
-	if (head && note.articulations.length > 0) {
-		head.addModifier(new Annotation(note.articulations.join(' ')).setVerticalJustification(1), 0);
-	}
+	if (head) addArticulations(head, note.articulations);
 
 	const connections: Connection[] = [];
 	connectors.forEach((connector, i) => {
@@ -558,6 +557,27 @@ function addBendModifiers(tabNote: TabNote, fromFret: number, bendEvents: FretEv
 	}
 }
 
+/** A technique label above the staff, lifted clear of the top string line. */
+function topLabel(text: string): Annotation {
+	const ann = new Annotation(text).setVerticalJustification(1);
+	ann.setYShift(-10); // lift it off the staff so it reads as an annotation, not a fret
+	return ann;
+}
+
+/**
+ * Renders a note's articulations as first-class marks: vibrato as VexFlow's wavy line, palm
+ * mute as a "P.M." label above the staff, anything else as a small label.
+ */
+function addArticulations(tabNote: TabNote, articulations: string[]): void {
+	const labels: string[] = [];
+	for (const a of articulations) {
+		if (a === 'vib') tabNote.addModifier(new Vibrato());
+		else if (a === 'pm') labels.push('P.M.');
+		else labels.push(a);
+	}
+	if (labels.length > 0) tabNote.addModifier(topLabel(labels.join(' ')), 0);
+}
+
 function decorate(tabNote: TabNote, note: Note): void {
 	const from = note.fret ?? 0;
 	const bends = note.events.filter((e) => e.connector === 'b' || e.connector === 'r');
@@ -567,11 +587,8 @@ function decorate(tabNote: TabNote, note: Note): void {
 	const labels = note.events
 		.filter((e) => e.connector !== 'b' && e.connector !== 'r')
 		.map((e) => `${e.connector}${e.fret}`);
-	if (note.articulations.length > 0) labels.push(...note.articulations);
-	if (labels.length > 0) {
-		// TOP justification keeps technique text above the staff, not on the bottom string line.
-		tabNote.addModifier(new Annotation(labels.join(' ')).setVerticalJustification(1), 0);
-	}
+	if (labels.length > 0) tabNote.addModifier(topLabel(labels.join(' ')), 0);
+	addArticulations(tabNote, note.articulations);
 }
 
 function bendText(semitones: number): string {

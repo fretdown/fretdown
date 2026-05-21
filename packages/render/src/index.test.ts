@@ -67,8 +67,8 @@ describe('renderToSVG', () => {
 		expect(svg).toContain('Bass');
 		// the s5f2h3 hammer-on now draws a real tie (not an "h3" text annotation)
 		expect(svg).toContain('vf-stavetie');
-		// palm-mute label from the guitar verse stays an annotation
-		expect(svg).toContain('pm');
+		// palm-mute renders as a "P.M." label above the staff
+		expect(svg).toContain('P.M.');
 	});
 
 	it('expands a hammer chain into slurred noteheads', () => {
@@ -150,17 +150,28 @@ describe('renderToSVG', () => {
 		expect(/<text[^>]*>p14<\/text>/.test(svg)).toBe(false);
 	});
 
-	it('still places a non-expandable technique label above the staff', () => {
-		// a bend ('b') isn't a transition connector, so it keeps a label — which must sit on top
+	it('renders palm mute as a "P.M." label above the staff', () => {
 		const svg = renderToSVG(
 			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f15.pm:4. s2f3:8 |\n'),
 			{ width: 600 },
 		);
 		const annotationY = Number(
-			svg.match(/<text stroke="none" x="[\d.]+" y="([\d.]+)">pm<\/text>/)?.[1],
+			svg.match(/<text stroke="none" x="[\d.]+" y="([\d.]+)">P\.M\.<\/text>/)?.[1],
 		);
 		const topLineY = Number(svg.match(/<path fill="none" d="M[\d.]+ ([\d.]+)/)?.[1]);
+		// sits clearly above the top string line, not crammed into the first fret
 		expect(annotationY).toBeLessThan(topLineY);
+	});
+
+	it('renders vibrato as a wavy line, not a "vib" text label', () => {
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s2f8.vib:2 s2f3:2 |\n'),
+			{ width: 600 },
+		);
+		expect(/<text[^>]*>vib<\/text>/.test(svg)).toBe(false); // not a text label
+		// VexFlow's Vibrato draws a zig-zag of quadratic curves (multiple Q commands).
+		const wavy = [...svg.matchAll(/<path stroke="none" d="([^"]*Q[^"]*Q[^"]*Q[^"]*)"/g)];
+		expect(wavy.length).toBeGreaterThan(0);
 	});
 
 	it('folds a bend-and-release into the bend, with no floating "rel"', () => {
