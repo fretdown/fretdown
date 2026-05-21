@@ -1,5 +1,6 @@
 'use client';
 
+import '@/lib/monaco-setup';
 import { type PlaybackCursor, TabPreview } from '@/components/TabPreview';
 import { Button } from '@/components/ui/button';
 import { EXAMPLE_SOURCE } from '@/lib/example';
@@ -207,9 +208,9 @@ export function Playground() {
 	};
 
 	return (
-		<div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+		<div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-x-hidden">
 			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
-				<div className="flex items-center gap-2">
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
 					<label className="flex items-center gap-1.5 text-sm">
 						<span className="text-muted-foreground">Sample</span>
 						<select
@@ -232,7 +233,7 @@ export function Playground() {
 						{notice ?? 'Edit on the left; the tab renders live on the right.'}
 					</span>
 				</div>
-				<div className="flex items-center gap-2">
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
 					<Button size="sm" onClick={handlePlay}>
 						{playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
 						{playing ? 'Stop' : 'Play'}
