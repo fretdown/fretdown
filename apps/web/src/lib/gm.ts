@@ -1,3 +1,5 @@
+import { getInstrument } from '@fretdown/core';
+
 /** General MIDI program names, indexed by program number (0–127). */
 export const GM_INSTRUMENTS: string[] = [
 	'Acoustic Grand Piano',
@@ -130,10 +132,7 @@ export const GM_INSTRUMENTS: string[] = [
 	'Gunshot',
 ];
 
-/** A sensible default GM program for a Fretdown instrument id. */
+/** A sensible default GM program for a Fretdown instrument id (from core's instrument table). */
 export function defaultProgram(instrument: string | undefined): number {
-	const id = (instrument ?? '').toLowerCase();
-	if (id.includes('bass')) return 33; // Electric Bass (finger)
-	if (id.includes('ukulele')) return 24; // Acoustic Guitar (nylon)
-	return 25; // Acoustic Guitar (steel)
+	return (instrument ? getInstrument(instrument)?.program : undefined) ?? 25; // Acoustic Guitar (steel)
 }
