@@ -35,11 +35,18 @@ export function Playground() {
 
 	const parsed = useMemo(() => parse(source), [source]);
 	const tracks = useMemo(() => parsed.score?.tracks ?? [], [parsed]);
+	const scoreTempo = parsed.score?.metadata.tempo ?? 120;
+	const [tempo, setTempo] = useState(scoreTempo);
 
 	// Reset the selection if the chosen track no longer exists after an edit.
 	useEffect(() => {
 		setSelected((prev) => (prev === 'all' || prev < tracks.length ? prev : 'all'));
 	}, [tracks.length]);
+
+	// Follow the score's tempo when it changes (e.g. loading a different sample).
+	useEffect(() => {
+		setTempo(scoreTempo);
+	}, [scoreTempo]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -110,7 +117,7 @@ export function Playground() {
 		if (!score) return;
 		const onlyTrack = selected === 'all' ? undefined : selected;
 		// Expand repeats so playback (and the cursor) run through every repetition.
-		const timeline = buildTimeline(expandRepeats(score), onlyTrack);
+		const timeline = buildTimeline(expandRepeats(score), onlyTrack, tempo);
 		if (timeline.events.length === 0 || timeline.barSeconds === 0) {
 			flash('Nothing to play yet.');
 			return;
@@ -238,6 +245,18 @@ export function Playground() {
 						{playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
 						{playing ? 'Stop' : 'Play'}
 					</Button>
+					<label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+						<input
+							type="range"
+							min={40}
+							max={240}
+							value={tempo}
+							aria-label="Tempo (BPM)"
+							onChange={(e) => setTempo(Number(e.target.value))}
+							className="w-24 accent-accent"
+						/>
+						<span className="tabular-nums">{tempo} BPM</span>
+					</label>
 					{tracks.length > 0 && (
 						<select
 							aria-label="Instrument to play"

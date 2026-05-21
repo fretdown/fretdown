@@ -44,6 +44,24 @@ describe('buildTimeline', () => {
 		expect(t.events[1]?.time).toBeCloseTo(0.25);
 	});
 
+	it('plays a bend as one attack that glides via pitch-bend (no re-articulation)', () => {
+		// s3f5 bend up to fret 7: a single note-on at fret 5 (60), plus a bend reaching +2 semis
+		const t = buildTimeline(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5b7:4 s3f5:2 |\n'));
+		const firstBeat = t.events.filter((e) => e.time === 0);
+		expect(firstBeat).toHaveLength(1); // not two attacks
+		expect(firstBeat[0]?.notes).toEqual([60]);
+		const peak = Math.max(...t.bends.map((b) => b.semitones));
+		expect(peak).toBeCloseTo(2); // reaches fret 7 (two semitones up)
+		// and re-centers afterwards
+		expect(t.bends.at(-1)?.semitones).toBe(0);
+	});
+
+	it('honors a tempo override', () => {
+		const slow = buildTimeline(scoreFrom(GUITAR), undefined, 60);
+		// half the tempo → twice the bar length
+		expect(slow.barSeconds).toBeCloseTo(4);
+	});
+
 	it('places each track on its own channel, skipping percussion (9)', () => {
 		expect(channelFor(0)).toBe(0);
 		expect(channelFor(9)).toBe(10);
