@@ -21,6 +21,8 @@ export interface PlayEvent {
 	/** Seconds the notes are held. */
 	duration: number;
 	notes: number[];
+	/** Note-on velocity (0–127); defaults to a normal pick. */
+	velocity?: number;
 }
 
 /** A pitch-bend sample: how far (in semitones) a channel is bent at a given time. */
@@ -138,9 +140,19 @@ function collectBeat(
 
 	// single note — transitions re-attack; bends/releases glide via pitch-bend.
 	const note = beat.note;
-	if (note.dead) return start + total;
 	const base = noteToMidi(track, note);
 	if (base === null) return start + total;
+	if (note.dead) {
+		// A muted/dead note is a short, soft percussive thunk on the (open) string.
+		out.push({
+			channel,
+			time: start,
+			duration: Math.min(total, 0.08),
+			notes: [base],
+			velocity: 42,
+		});
+		return start + total;
+	}
 	const openCapo = base - (note.fret ?? 0);
 
 	const segments = noteSegments(note);
@@ -258,8 +270,9 @@ export class TabPlayer {
 				const e = timeline.events[this.idx++] as PlayEvent;
 				const t = this.startTime + e.time;
 				const off = t + Math.max(0.05, e.duration * 0.92);
+				const velocity = e.velocity ?? 96;
 				for (const n of e.notes) {
-					synth.send([0x90 | e.channel, n, 96], t);
+					synth.send([0x90 | e.channel, n, velocity], t);
 					synth.send([0x80 | e.channel, n, 0], off);
 				}
 			}

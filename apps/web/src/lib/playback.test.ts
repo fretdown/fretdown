@@ -56,6 +56,16 @@ describe('buildTimeline', () => {
 		expect(t.bends.at(-1)?.semitones).toBe(0);
 	});
 
+	it('plays a muted/dead note as a short soft thunk instead of silence', () => {
+		const t = buildTimeline(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s3x:4 s3f5:2 s3f5:4 |\n'),
+		);
+		const muted = t.events[0];
+		expect(muted?.notes).toHaveLength(1); // it sounds (G3 open = 55)
+		expect(muted?.velocity).toBeLessThan(60); // soft
+		expect(muted?.duration).toBeLessThan(0.1); // short
+	});
+
 	it('honors a tempo override', () => {
 		const slow = buildTimeline(scoreFrom(GUITAR), undefined, 60);
 		// half the tempo → twice the bar length

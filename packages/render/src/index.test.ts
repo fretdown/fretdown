@@ -96,6 +96,15 @@ describe('renderToSVG', () => {
 		expect(/Full|½/.test(svg)).toBe(true); // bend arrows still drawn
 	});
 
+	it('collapses repeated bends to one arrow (no "Full Full")', () => {
+		const svg = renderToSVG(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f9b11b11r9p7:4 s3f7:2 s3f7:4 |\n'),
+			{ width: 600 },
+		);
+		expect(svg.match(/>Full</g)?.length).toBe(1); // b11 b11 → a single bend
+		expect(/<text[^>]*>rel<\/text>/.test(svg)).toBe(false); // release folds into the bend
+	});
+
 	it('expands an odd-length chain (drawn as a tuplet) instead of a text label', () => {
 		// s4f7/9\7 has 2 events → length 3 (not a power of two): a tuplet, not a label
 		const svg = renderToSVG(

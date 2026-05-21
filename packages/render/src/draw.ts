@@ -424,18 +424,7 @@ function tryExpandChain(
 	// Draw each notehead's bends as Bend arrows (a bend immediately released folds into one).
 	segments.forEach((seg, idx) => {
 		const tabNote = notes[idx];
-		if (!tabNote) return;
-		for (let i = 0; i < seg.bends.length; i++) {
-			const event = seg.bends[i];
-			if (!event) continue;
-			if (event.connector === 'b') {
-				const release = seg.bends[i + 1]?.connector === 'r';
-				tabNote.addModifier(new Bend(bendText(event.fret - seg.fret), release), 0);
-				if (release) i++;
-			} else {
-				tabNote.addModifier(new Annotation('rel').setVerticalJustification(1), 0);
-			}
-		}
+		if (tabNote) addBendModifiers(tabNote, seg.fret, seg.bends);
 	});
 
 	const head = notes[0];
@@ -548,23 +537,36 @@ function beatToTickable(beat: Beat): StemmableNote {
 	return tabNote as unknown as StemmableNote;
 }
 
-function decorate(tabNote: TabNote, note: Note): void {
-	const from = note.fret ?? 0;
-	const labels: string[] = [];
-	for (let i = 0; i < note.events.length; i++) {
-		const event = note.events[i];
-		if (!event) continue;
+/**
+ * Adds Bend arrows for a note's bend/release events. Consecutive bends to the same fret are
+ * collapsed (so `b11 b11` is one arrow, not "Full Full"), and a bend immediately followed by a
+ * release folds into a single bend-and-return arrow.
+ */
+function addBendModifiers(tabNote: TabNote, fromFret: number, bendEvents: FretEvent[]): void {
+	const events = bendEvents.filter(
+		(e, i) => i === 0 || e.fret !== (bendEvents[i - 1] as FretEvent).fret,
+	);
+	for (let i = 0; i < events.length; i++) {
+		const event = events[i] as FretEvent;
 		if (event.connector === 'b') {
-			// A bend immediately followed by a release draws as one bend-and-return arrow.
-			const release = note.events[i + 1]?.connector === 'r';
-			tabNote.addModifier(new Bend(bendText(event.fret - from), release), 0);
+			const release = events[i + 1]?.connector === 'r';
+			tabNote.addModifier(new Bend(bendText(event.fret - fromFret), release), 0);
 			if (release) i++;
 		} else if (event.connector === 'r') {
-			labels.push('rel');
-		} else {
-			labels.push(`${event.connector}${event.fret}`);
+			tabNote.addModifier(new Annotation('rel').setVerticalJustification(1), 0);
 		}
 	}
+}
+
+function decorate(tabNote: TabNote, note: Note): void {
+	const from = note.fret ?? 0;
+	const bends = note.events.filter((e) => e.connector === 'b' || e.connector === 'r');
+	addBendModifiers(tabNote, from, bends);
+
+	// Any non-bend connectors (only reached on the chord fallback) become a small label.
+	const labels = note.events
+		.filter((e) => e.connector !== 'b' && e.connector !== 'r')
+		.map((e) => `${e.connector}${e.fret}`);
 	if (note.articulations.length > 0) labels.push(...note.articulations);
 	if (labels.length > 0) {
 		// TOP justification keeps technique text above the staff, not on the bottom string line.
