@@ -5,11 +5,17 @@ import { type PlaybackCursor, TabPreview } from '@/components/TabPreview';
 import { Button } from '@/components/ui/button';
 import { EXAMPLE_SOURCE } from '@/lib/example';
 import { FRETDOWN_LANGUAGE_ID, computeMarkers, registerFretdown } from '@/lib/fretdown-language';
-import { defaultProgram } from '@/lib/gm';
 import { TabPlayer, buildTimeline } from '@/lib/playback';
 import { SAMPLES } from '@/lib/samples';
 import { decodeSource, encodeSource } from '@/lib/share';
-import { expandRepeats, parse, parseAsciiTab, toMidi, toMusicXML } from '@fretdown/core';
+import {
+	expandRepeats,
+	getInstrument,
+	parse,
+	parseAsciiTab,
+	toMidi,
+	toMusicXML,
+} from '@fretdown/core';
 import Editor, { type Monaco, type OnMount } from '@monaco-editor/react';
 import { Check, Download, FileInput, Play, Share2, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -125,8 +131,8 @@ export function Playground() {
 		setPlaying(true);
 		await playerRef.current?.play(
 			timeline,
-			// Each track keeps its instrument's GM program; only the soloed track has events.
-			tracks.map((t) => defaultProgram(t.instrument)),
+			// Each track loads its instrument's sample set (acoustic/electric guitar, bass, …).
+			tracks.map((t) => getInstrument(t.instrument ?? '')?.sample ?? 'acoustic_guitar_steel'),
 			(elapsed) => {
 				const idx = Math.min(Math.floor(elapsed / timeline.barSeconds), timeline.measureCount - 1);
 				const progress = Math.min(

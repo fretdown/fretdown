@@ -44,16 +44,15 @@ describe('buildTimeline', () => {
 		expect(t.events[1]?.time).toBeCloseTo(0.25);
 	});
 
-	it('plays a bend as one attack that glides via pitch-bend (no re-articulation)', () => {
-		// s3f5 bend up to fret 7: a single note-on at fret 5 (60), plus a bend reaching +2 semis
+	it('plays a bend as one attack that glides via detune (no re-articulation)', () => {
+		// s3f5 bend up to fret 7: a single note-on at fret 5 (60) with a per-note bend to +2 semis
 		const t = buildTimeline(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5b7:4 s3f5:2 |\n'));
 		const firstBeat = t.events.filter((e) => e.time === 0);
 		expect(firstBeat).toHaveLength(1); // not two attacks
 		expect(firstBeat[0]?.notes).toEqual([60]);
-		const peak = Math.max(...t.bends.map((b) => b.semitones));
-		expect(peak).toBeCloseTo(2); // reaches fret 7 (two semitones up)
-		// and re-centers afterwards
-		expect(t.bends.at(-1)?.semitones).toBe(0);
+		const bend = firstBeat[0]?.bend ?? [];
+		expect(Math.max(...bend.map((b) => b.semitones))).toBeCloseTo(2); // reaches fret 7
+		expect(bend.at(-1)?.semitones).toBe(0); // re-centers
 	});
 
 	it('plays a muted/dead note as a short soft thunk instead of silence', () => {
@@ -78,9 +77,10 @@ describe('buildTimeline', () => {
 	it('adds a pitch wobble for a vibrato note', () => {
 		const plain = buildTimeline(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5:1 |\n'));
 		const vib = buildTimeline(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5.vib:1 |\n'));
-		expect(plain.bends.length).toBe(0);
-		expect(vib.bends.length).toBeGreaterThan(0);
-		expect(Math.max(...vib.bends.map((b) => b.semitones))).toBeGreaterThan(0);
+		expect(plain.events[0]?.bend).toBeUndefined();
+		const bend = vib.events[0]?.bend ?? [];
+		expect(bend.length).toBeGreaterThan(0);
+		expect(Math.max(...bend.map((b) => b.semitones))).toBeGreaterThan(0);
 	});
 
 	it('honors a tempo override', () => {

@@ -8,12 +8,18 @@ import {
 } from '@fretdown/core';
 
 // Connectors that move to a new fret (a fresh attack). Bends/releases instead glide the
-// current note via MIDI pitch-bend, so they sustain rather than re-articulate.
+// current note via detune automation, so they sustain rather than re-articulate.
 const TRANSITION_CONNECTORS = new Set(['h', 'p', '/', '\\']);
-// Pitch-bend range (± semitones) the synth is configured for; wide enough for big bends.
-const BEND_RANGE = 12;
+// Free FluidR3_GM samples served with CORS by jsDelivr.
+const SAMPLE_BASE = 'https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@gh-pages/FluidR3_GM';
 
-/** One scheduled sound: a set of simultaneous MIDI pitches on a channel at a time. */
+/** A pitch-bend control point: how far (semitones) the note is bent `t` seconds after it starts. */
+export interface BendPoint {
+	t: number;
+	semitones: number;
+}
+
+/** One scheduled sound: simultaneous MIDI pitches on a channel, with optional bend + velocity. */
 export interface PlayEvent {
 	channel: number;
 	/** Seconds from the start of playback. */
@@ -23,18 +29,12 @@ export interface PlayEvent {
 	notes: number[];
 	/** Note-on velocity (0–127); defaults to a normal pick. */
 	velocity?: number;
-}
-
-/** A pitch-bend sample: how far (in semitones) a channel is bent at a given time. */
-export interface BendEvent {
-	channel: number;
-	time: number;
-	semitones: number;
+	/** Per-note pitch bend / vibrato, applied to this voice's detune. */
+	bend?: BendPoint[];
 }
 
 export interface Timeline {
 	events: PlayEvent[];
-	bends: BendEvent[];
 	/** Seconds per measure (one bar). Every measure has the same span. */
 	barSeconds: number;
 	/** Number of measures in the longest track. */
@@ -48,9 +48,13 @@ export function channelFor(trackIndex: number): number {
 	return trackIndex < 9 ? trackIndex : trackIndex + 1;
 }
 
+function trackForChannel(channel: number): number {
+	return channel < 9 ? channel : channel - 1;
+}
+
 /**
- * Builds a flat, time-sorted schedule of note + pitch-bend events from a score. Pass
- * `onlyTrack` to solo a single track; `tempoOverride` to play at a different bpm.
+ * Builds a flat, time-sorted schedule of note events (with per-note bends) from a score.
+ * Pass `onlyTrack` to solo a single track; `tempoOverride` to play at a different bpm.
  */
 export function buildTimeline(score: Score, onlyTrack?: number, tempoOverride?: number): Timeline {
 	const bpm = tempoOverride ?? score.metadata.tempo ?? 120;
@@ -59,7 +63,6 @@ export function buildTimeline(score: Score, onlyTrack?: number, tempoOverride?: 
 	const barSeconds = (numerator / denominator) * wholeNote;
 
 	const events: PlayEvent[] = [];
-	const bends: BendEvent[] = [];
 	let measureCount = 0;
 
 	score.tracks.forEach((track, trackIndex) => {
@@ -73,14 +76,13 @@ export function buildTimeline(score: Score, onlyTrack?: number, tempoOverride?: 
 		let cursor = 0;
 		for (const measure of measures) {
 			for (const beat of measure.beats) {
-				cursor = collectBeat(track, beat, cursor, 1, channel, wholeNote, events, bends);
+				cursor = collectBeat(track, beat, cursor, 1, channel, wholeNote, events);
 			}
 		}
 	});
 
 	events.sort((a, b) => a.time - b.time);
-	bends.sort((a, b) => a.time - b.time);
-	return { events, bends, barSeconds, measureCount, duration: measureCount * barSeconds };
+	return { events, barSeconds, measureCount, duration: measureCount * barSeconds };
 }
 
 function secondsOf(value: number, dotted: boolean, scale: number, wholeNote: number): number {
@@ -90,7 +92,6 @@ function secondsOf(value: number, dotted: boolean, scale: number, wholeNote: num
 
 interface Segment {
 	fret: number;
-	/** Bend/release target frets decorating this attack. */
 	bendFrets: number[];
 }
 
@@ -115,7 +116,6 @@ function collectBeat(
 	channel: number,
 	wholeNote: number,
 	out: PlayEvent[],
-	bends: BendEvent[],
 ): number {
 	if (beat.kind === 'rest') {
 		return start + secondsOf(beat.duration.value, beat.duration.dotted, scale, wholeNote);
@@ -124,7 +124,7 @@ function collectBeat(
 	if (beat.kind === 'tuplet') {
 		const inner = scale * (powerOfTwoBelow(beat.n) / beat.n);
 		let c = start;
-		for (const b of beat.beats) c = collectBeat(track, b, c, inner, channel, wholeNote, out, bends);
+		for (const b of beat.beats) c = collectBeat(track, b, c, inner, channel, wholeNote, out);
 		return c;
 	}
 
@@ -138,7 +138,7 @@ function collectBeat(
 		return start + total;
 	}
 
-	// single note — transitions re-attack; bends/releases glide via pitch-bend.
+	// single note — transitions re-attack; bends/releases glide via detune.
 	const note = beat.note;
 	const base = noteToMidi(track, note);
 	if (base === null) return start + total;
@@ -161,59 +161,51 @@ function collectBeat(
 	const step = total / segments.length;
 	segments.forEach((seg, i) => {
 		const segStart = start + i * step;
-		// Palm-muted notes are shorter and softer (the percussive chunk).
 		const duration = palmMuted ? Math.min(step, step * 0.4) : step;
-		out.push({
+		const event: PlayEvent = {
 			channel,
 			time: segStart,
 			duration,
 			notes: [openCapo + seg.fret],
 			velocity: palmMuted ? 58 : undefined,
-		});
+		};
 		if (seg.bendFrets.length > 0) {
-			// Control points (semitones relative to the attack), starting at 0 (the picked pitch).
-			const points = [0, ...seg.bendFrets.map((f) => f - seg.fret)];
-			pushBendRamp(bends, channel, segStart, step, points);
+			event.bend = bendRamp([0, ...seg.bendFrets.map((f) => f - seg.fret)], step);
 		} else if (vibrato) {
-			pushVibrato(bends, channel, segStart, step);
+			event.bend = vibratoRamp(step);
 		}
+		out.push(event);
 	});
 	return start + total;
 }
 
-/** Schedules a smooth pitch-bend gliding through `points` (semitones), then re-centers. */
-function pushBendRamp(
-	bends: BendEvent[],
-	channel: number,
-	segStart: number,
-	step: number,
-	points: number[],
-): void {
+/** Bend control points (relative seconds) gliding through `points` semitones, then re-centering. */
+function bendRamp(points: number[], step: number): BendPoint[] {
 	const nodes = points.length;
-	const portion = step * 0.85; // reach the last target a bit before the note ends
+	const portion = step * 0.85;
 	const nodeTime = (i: number) => (nodes === 1 ? 0 : (i / (nodes - 1)) * portion);
-	const resolution = 0.025; // 25ms between bend samples for a smooth glide
-	for (let t = 0; t <= portion + 1e-9; t += resolution) {
+	const out: BendPoint[] = [];
+	for (let t = 0; t <= portion + 1e-9; t += 0.025) {
 		let j = 0;
 		while (j < nodes - 2 && t > nodeTime(j + 1)) j++;
 		const t0 = nodeTime(j);
 		const t1 = nodeTime(j + 1);
 		const frac = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
-		const semitones =
-			(points[j] as number) + ((points[j + 1] as number) - (points[j] as number)) * frac;
-		bends.push({ channel, time: segStart + t, semitones });
+		out.push({
+			t,
+			semitones: (points[j] as number) + ((points[j + 1] as number) - (points[j] as number)) * frac,
+		});
 	}
-	bends.push({ channel, time: segStart + step, semitones: 0 }); // re-center for the next note
+	out.push({ t: step, semitones: 0 });
+	return out;
 }
 
-/** Schedules a gentle pitch wobble over a note's duration, then re-centers (vibrato). */
-function pushVibrato(bends: BendEvent[], channel: number, start: number, step: number): void {
-	const rate = 5.5; // Hz
-	const depth = 0.25; // semitones
-	for (let t = 0; t <= step; t += 0.03) {
-		bends.push({ channel, time: start + t, semitones: depth * Math.sin(2 * Math.PI * rate * t) });
-	}
-	bends.push({ channel, time: start + step, semitones: 0 });
+function vibratoRamp(step: number): BendPoint[] {
+	const out: BendPoint[] = [];
+	for (let t = 0; t <= step; t += 0.03)
+		out.push({ t, semitones: 0.25 * Math.sin(2 * Math.PI * 5.5 * t) });
+	out.push({ t: step, semitones: 0 });
+	return out;
 }
 
 function powerOfTwoBelow(n: number): number {
@@ -222,104 +214,189 @@ function powerOfTwoBelow(n: number): number {
 	return p;
 }
 
-/** Converts semitones (within ±BEND_RANGE) to a 14-bit MIDI pitch-bend value. */
-function bendValue(semitones: number): number {
-	const v = Math.round(
-		8192 + (Math.max(-BEND_RANGE, Math.min(BEND_RANGE, semitones)) / BEND_RANGE) * 8191,
-	);
-	return Math.max(0, Math.min(16383, v));
+const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+/** FluidR3 sample file name for a MIDI note (flats, e.g. 61 → "Db4"). */
+function flatName(midi: number): string {
+	return `${FLAT_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: webaudio-tinysynth ships no types
-type TinySynth = any;
+/** A loaded set of pitch samples for one instrument, plus per-note playback with detune bends. */
+class Soundfont {
+	private buffers = new Map<number, AudioBuffer>();
+	loaded = false;
+
+	constructor(
+		private ctx: AudioContext,
+		private out: AudioNode,
+	) {}
+
+	/** Fetches every ~minor-third sample in [low, high]; `loaded` is true if enough decoded. */
+	async load(folder: string, low: number, high: number): Promise<void> {
+		const midis: number[] = [];
+		for (let m = low; m <= high; m += 3) midis.push(m);
+		await Promise.all(
+			midis.map(async (m) => {
+				try {
+					const res = await fetch(`${SAMPLE_BASE}/${folder}-mp3/${flatName(m)}.mp3`);
+					if (!res.ok) return;
+					this.buffers.set(m, await this.ctx.decodeAudioData(await res.arrayBuffer()));
+				} catch {
+					/* a missing sample is fine — the nearest one is pitch-shifted to cover it */
+				}
+			}),
+		);
+		this.loaded = this.buffers.size >= 3;
+	}
+
+	private nearest(midi: number): number | null {
+		let best: number | null = null;
+		let dist = Number.POSITIVE_INFINITY;
+		for (const m of this.buffers.keys()) {
+			const d = Math.abs(m - midi);
+			if (d < dist) {
+				dist = d;
+				best = m;
+			}
+		}
+		return best;
+	}
+
+	play(midi: number, time: number, duration: number, gain: number, bend?: BendPoint[]): void {
+		const sampleMidi = this.nearest(midi);
+		if (sampleMidi === null) return;
+		const src = this.ctx.createBufferSource();
+		src.buffer = this.buffers.get(sampleMidi) as AudioBuffer;
+		const baseCents = (midi - sampleMidi) * 100;
+		src.detune.setValueAtTime(baseCents, time);
+		if (bend)
+			for (const p of bend)
+				src.detune.linearRampToValueAtTime(baseCents + p.semitones * 100, time + p.t);
+		applyEnvelope(this.ctx, src, this.out, time, duration, gain);
+	}
+}
+
+/** Connects a source through a gain envelope and schedules start/stop. */
+function applyEnvelope(
+	ctx: AudioContext,
+	src: AudioScheduledSourceNode,
+	out: AudioNode,
+	time: number,
+	duration: number,
+	peak: number,
+): void {
+	const env = ctx.createGain();
+	const end = time + duration;
+	env.gain.setValueAtTime(peak, time);
+	env.gain.setValueAtTime(peak, Math.max(time, end - 0.04));
+	env.gain.linearRampToValueAtTime(0.0001, end + 0.3); // short release tail
+	src.connect(env).connect(out);
+	src.start(time);
+	src.stop(end + 0.35);
+}
+
+/** Oscillator fallback voice used when samples can't be fetched (keeps bends working). */
+function playOsc(
+	ctx: AudioContext,
+	out: AudioNode,
+	midi: number,
+	time: number,
+	duration: number,
+	gain: number,
+	bend?: BendPoint[],
+): void {
+	const osc = ctx.createOscillator();
+	osc.type = 'sawtooth';
+	osc.frequency.setValueAtTime(440 * 2 ** ((midi - 69) / 12), time);
+	osc.detune.setValueAtTime(0, time);
+	if (bend) for (const p of bend) osc.detune.linearRampToValueAtTime(p.semitones * 100, time + p.t);
+	const lp = ctx.createBiquadFilter();
+	lp.type = 'lowpass';
+	lp.frequency.value = 2600;
+	applyEnvelope(ctx, osc, lp, time, duration, gain * 0.4);
+	lp.connect(out);
+}
+
+/** Resolves the AudioContext constructor lazily (browser only — keeps this module Node-safe). */
+function audioContextClass(): typeof AudioContext {
+	// biome-ignore lint/suspicious/noExplicitAny: webkit-prefixed AudioContext fallback
+	return window.AudioContext ?? (window as any).webkitAudioContext;
+}
 
 /**
- * Plays a {@link Timeline} through a General MIDI synth (webaudio-tinysynth), using
- * look-ahead scheduling so {@link stop} can cancel notes that haven't sounded yet.
+ * Plays a {@link Timeline} through sampled instruments (free FluidR3_GM samples), with
+ * per-note pitch bend / vibrato via detune. Falls back to a synth voice per channel whose
+ * samples failed to load, so playback is never silent.
  */
 export class TabPlayer {
-	private synth: TinySynth = null;
+	private ctx: AudioContext | null = null;
+	private master: GainNode | null = null;
+	private fonts = new Map<number, Soundfont | null>();
 	private raf = 0;
 	private startTime = 0;
 	private idx = 0;
-	private bendIdx = 0;
-	private timeline: Timeline | null = null;
 	private onTick?: (elapsed: number) => void;
 	private onEnd?: () => void;
 
+	/** `samples[trackIndex]` is the FluidR3_GM folder name for that track's instrument. */
 	async play(
 		timeline: Timeline,
-		programs: number[],
+		samples: string[],
 		onTick: (elapsed: number) => void,
 		onEnd: () => void,
 	): Promise<void> {
 		this.stop();
-		if (!this.synth) {
-			const mod = await import('webaudio-tinysynth');
-			const Synth = ((mod as { default?: TinySynth }).default ?? mod) as new (
-				opt: unknown,
-			) => TinySynth;
-			this.synth = new Synth({ voices: 64, useReverb: 1 });
-		}
-		const synth = this.synth;
-		const actx = synth.getAudioContext();
-		if (actx.state === 'suspended') await actx.resume();
+		if (!this.ctx) this.ctx = new (audioContextClass())();
+		const ctx = this.ctx;
+		if (ctx.state === 'suspended') await ctx.resume();
+		const master = ctx.createGain();
+		master.gain.value = 0.85;
+		master.connect(ctx.destination);
+		this.master = master;
 
-		programs.forEach((prog, trackIndex) => {
-			const ch = channelFor(trackIndex);
-			synth.send([0xc0 | ch, prog & 0x7f]);
-			// Widen the pitch-bend range (RPN 0) so big bends are reachable.
-			synth.send([0xb0 | ch, 101, 0]);
-			synth.send([0xb0 | ch, 100, 0]);
-			synth.send([0xb0 | ch, 6, BEND_RANGE]);
-			synth.send([0xe0 | ch, 0, 64]); // center any leftover bend
-		});
+		// Load a soundfont for each channel that actually plays.
+		const usedChannels = [...new Set(timeline.events.map((e) => e.channel))];
+		this.fonts = new Map();
+		await Promise.all(
+			usedChannels.map(async (channel) => {
+				const folder = samples[trackForChannel(channel)] ?? 'acoustic_guitar_steel';
+				const isBass = folder.includes('bass');
+				const font = new Soundfont(ctx, master);
+				await font.load(folder, isBass ? 28 : 40, isBass ? 67 : 88);
+				this.fonts.set(channel, font.loaded ? font : null);
+			}),
+		);
 
-		this.timeline = timeline;
 		this.onTick = onTick;
 		this.onEnd = onEnd;
 		this.idx = 0;
-		this.bendIdx = 0;
-		this.startTime = actx.currentTime + 0.15;
+		this.startTime = ctx.currentTime + 0.12;
 
 		const loop = () => {
-			const ct = actx.currentTime;
-			const horizon = ct + 0.2;
+			const now = ctx.currentTime;
+			const horizon = now + 0.2;
 			while (
 				this.idx < timeline.events.length &&
 				this.startTime + (timeline.events[this.idx] as PlayEvent).time < horizon
 			) {
 				const e = timeline.events[this.idx++] as PlayEvent;
 				const t = this.startTime + e.time;
-				const off = t + Math.max(0.05, e.duration * 0.92);
-				const velocity = e.velocity ?? 96;
-				for (const n of e.notes) {
-					synth.send([0x90 | e.channel, n, velocity], t);
-					synth.send([0x80 | e.channel, n, 0], off);
+				const gain = (e.velocity ?? 96) / 127;
+				const font = this.fonts.get(e.channel);
+				for (const midi of e.notes) {
+					if (font) font.play(midi, t, e.duration, gain, e.bend);
+					else playOsc(ctx, master, midi, t, e.duration, gain, e.bend);
 				}
 			}
-			while (
-				this.bendIdx < timeline.bends.length &&
-				this.startTime + (timeline.bends[this.bendIdx] as BendEvent).time < horizon
-			) {
-				const b = timeline.bends[this.bendIdx++] as BendEvent;
-				const value = bendValue(b.semitones);
-				synth.send([0xe0 | b.channel, value & 0x7f, (value >> 7) & 0x7f], this.startTime + b.time);
-			}
-			const elapsed = ct - this.startTime;
+			const elapsed = now - this.startTime;
 			this.onTick?.(Math.max(0, elapsed));
-			if (elapsed >= timeline.duration + 0.1) {
+			if (elapsed >= timeline.duration + 0.4) {
 				this.finish();
 				return;
 			}
 			this.raf = requestAnimationFrame(loop);
 		};
 		this.raf = requestAnimationFrame(loop);
-	}
-
-	/** Live-swap the GM instrument for a track (takes effect immediately during playback). */
-	setProgram(trackIndex: number, program: number): void {
-		if (this.synth) this.synth.send([0xc0 | channelFor(trackIndex), program & 0x7f]);
 	}
 
 	get isPlaying(): boolean {
@@ -331,12 +408,10 @@ export class TabPlayer {
 			cancelAnimationFrame(this.raf);
 			this.raf = 0;
 		}
-		if (this.synth) {
-			for (let ch = 0; ch < 16; ch++) {
-				this.synth.send([0xb0 | ch, 120, 0]); // all sound off
-				this.synth.send([0xb0 | ch, 123, 0]); // all notes off
-				this.synth.send([0xe0 | ch, 0, 64]); // re-center pitch bend
-			}
+		// Muting the master silences everything already scheduled; the next play makes a new one.
+		if (this.master) {
+			this.master.gain.cancelScheduledValues(0);
+			this.master.gain.value = 0;
 		}
 	}
 
