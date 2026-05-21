@@ -66,6 +66,23 @@ describe('buildTimeline', () => {
 		expect(muted?.duration).toBeLessThan(0.1); // short
 	});
 
+	it('plays a palm-muted note shorter and softer', () => {
+		const t = buildTimeline(
+			scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5.pm:4 s3f5:2 s3f5:4 |\n'),
+		);
+		const e = t.events[0];
+		expect(e?.velocity).toBeLessThan(70);
+		expect(e?.duration).toBeLessThan(0.5); // shorter than a full quarter (0.5s at 120bpm)
+	});
+
+	it('adds a pitch wobble for a vibrato note', () => {
+		const plain = buildTimeline(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5:1 |\n'));
+		const vib = buildTimeline(scoreFrom('@track G\n@instrument guitar\nr:\n  | s3f5.vib:1 |\n'));
+		expect(plain.bends.length).toBe(0);
+		expect(vib.bends.length).toBeGreaterThan(0);
+		expect(Math.max(...vib.bends.map((b) => b.semitones))).toBeGreaterThan(0);
+	});
+
 	it('honors a tempo override', () => {
 		const slow = buildTimeline(scoreFrom(GUITAR), undefined, 60);
 		// half the tempo → twice the bar length

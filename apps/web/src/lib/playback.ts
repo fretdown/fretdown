@@ -154,16 +154,28 @@ function collectBeat(
 		return start + total;
 	}
 	const openCapo = base - (note.fret ?? 0);
+	const palmMuted = note.articulations.includes('pm');
+	const vibrato = note.articulations.includes('vib');
 
 	const segments = noteSegments(note);
 	const step = total / segments.length;
 	segments.forEach((seg, i) => {
 		const segStart = start + i * step;
-		out.push({ channel, time: segStart, duration: step, notes: [openCapo + seg.fret] });
+		// Palm-muted notes are shorter and softer (the percussive chunk).
+		const duration = palmMuted ? Math.min(step, step * 0.4) : step;
+		out.push({
+			channel,
+			time: segStart,
+			duration,
+			notes: [openCapo + seg.fret],
+			velocity: palmMuted ? 58 : undefined,
+		});
 		if (seg.bendFrets.length > 0) {
 			// Control points (semitones relative to the attack), starting at 0 (the picked pitch).
 			const points = [0, ...seg.bendFrets.map((f) => f - seg.fret)];
 			pushBendRamp(bends, channel, segStart, step, points);
+		} else if (vibrato) {
+			pushVibrato(bends, channel, segStart, step);
 		}
 	});
 	return start + total;
@@ -192,6 +204,16 @@ function pushBendRamp(
 		bends.push({ channel, time: segStart + t, semitones });
 	}
 	bends.push({ channel, time: segStart + step, semitones: 0 }); // re-center for the next note
+}
+
+/** Schedules a gentle pitch wobble over a note's duration, then re-centers (vibrato). */
+function pushVibrato(bends: BendEvent[], channel: number, start: number, step: number): void {
+	const rate = 5.5; // Hz
+	const depth = 0.25; // semitones
+	for (let t = 0; t <= step; t += 0.03) {
+		bends.push({ channel, time: start + t, semitones: depth * Math.sin(2 * Math.PI * rate * t) });
+	}
+	bends.push({ channel, time: start + step, semitones: 0 });
 }
 
 function powerOfTwoBelow(n: number): number {

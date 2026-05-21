@@ -120,6 +120,37 @@ E|-------------------|`;
 		expect(reparsed.score!.tracks[0]!.sections[0]!.items.length).toBeGreaterThanOrEqual(1);
 	});
 
+	it('captures trailing slides/bends/vibrato, palm-mute dots, and per-system repeats', () => {
+		const tab = `   .  .  .  .
+e|-------------12\\----| 4x
+B|--------------------|
+G|--------------------|
+D|--------------------|
+A|--------------------|
+E|-0--0--3~~--3b------|
+
+e|--------------------|
+B|--------------------|
+G|--------------------| 8x
+D|-----2p0------------|
+A|--------------------|
+E|-0--0---------------|`;
+		const result = parseAsciiTab(tab);
+		const fd = result.fretdown!;
+		expect(fd).toMatch(/\\/); // trailing slide-off (12\\)
+		expect(fd).toContain('.vib'); // 3~~ vibrato
+		expect(fd).toContain('.pm'); // palm-mute dots line
+		expect(fd).toMatch(/b\d/); // 3b bend with a default target
+		expect(fd).toContain(':|x4'); // first system repeat
+		expect(fd).toContain(':|x8'); // second system repeat (not collapsed into the first)
+		// still valid
+		const reparsed = parse(fd);
+		const errors = [...reparsed.diagnostics, ...validate(reparsed.score!)].filter(
+			(d) => d.severity === 'error',
+		);
+		expect(errors).toEqual([]);
+	});
+
 	it('captures hammer-ons as connector events', () => {
 		const tab = `e|-----------|
 B|-----------|

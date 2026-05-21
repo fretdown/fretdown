@@ -21,6 +21,8 @@ interface LineToken {
 	col: number;
 	fret: number | null; // null = dead note
 	connector: Connector | null;
+	/** Connector/`~` chars after the fret with no target (e.g. `12\`, `3b`, `3~`). */
+	trailing?: string[];
 }
 
 /** Best-effort conversion of legacy ASCII tab into a partial Fretdown score. */
@@ -28,44 +30,48 @@ export function parseAsciiTab(text: string): AsciiResult {
 	const ambiguities: string[] = [];
 	const rawLines = text.split('\n');
 
-	const groups = findTabBlocks(rawLines);
-	if (groups.length === 0) {
+	const blocks = findTabBlocks(rawLines);
+	if (blocks.length === 0) {
 		return { score: null, fretdown: null, confidence: 0, ambiguities: ['no-tab-block-found'] };
 	}
 
-	// Tabs usually stack several systems (line groups) of the same string count — play them
-	// back to back. The most common group size wins; odd-sized groups are skipped.
-	const stringCount = mode(groups.map((g) => g.length));
-	const systems = groups.filter((g) => g.length === stringCount);
+	// The most common block size is the string count; odd-sized blocks are skipped.
+	const stringCount = mode(blocks.map((b) => b.lines.length));
+	const systems = blocks.filter((b) => b.lines.length === stringCount);
 	if (systems.length > 1) ambiguities.push('multi-system');
 
 	const tuningInfo = INSTRUMENT_BY_STRINGS[stringCount];
 	if (!tuningInfo) ambiguities.push('unusual-string-count');
 	ambiguities.push('rhythm-approximated', 'tuning-guessed');
 
-	let hasConnectors = false;
-	const onsets = systems.flatMap((group) => {
+	// Each system becomes its own bars and keeps its own palm mutes and repeat count.
+	type Item = Score['tracks'][number]['sections'][number]['items'][number];
+	const items: Item[] = [];
+	let hasTechniques = false;
+	let hasRepeat = false;
+
+	for (const block of systems) {
+		const group = block.lines;
+		const firstBar = (group[0] as string).indexOf('|');
+		const pmCols = palmMuteColumns(rawLines, block.start, firstBar);
 		const perString = trimBodies(group).map((body) => {
 			const tokens = tokenizeLine(body);
-			if (tokens.some((t) => t.connector)) hasConnectors = true;
+			if (tokens.some((t) => t.connector || t.trailing?.length)) hasTechniques = true;
 			return tokens;
 		});
-		return systemEvents(perString, stringCount);
-	});
-	if (hasConnectors) ambiguities.push('techniques-approximated');
+		if (pmCols.length > 0) hasTechniques = true;
 
-	// 4/4 default → 8 eighth notes per bar.
-	const beats = layoutBars(onsets, 8);
-
-	// A trailing "(6x)" / "x6" annotation means the riff repeats — wrap the whole thing.
-	const repeatTimes = detectRepeat(rawLines);
-	if (repeatTimes && beats.length > 0) {
-		const first = beats[0] as { repeatStart?: boolean };
-		const last = beats[beats.length - 1] as { repeatEnd?: { times: number } };
-		first.repeatStart = true;
-		last.repeatEnd = { times: repeatTimes };
-		ambiguities.push('repeat-detected');
+		const measures = layoutBars(systemEvents(perString, stringCount, pmCols), 8);
+		const times = detectRepeat(group);
+		if (times && measures.length > 0) {
+			(measures[0] as { repeatStart?: boolean }).repeatStart = true;
+			(measures[measures.length - 1] as { repeatEnd?: { times: number } }).repeatEnd = { times };
+			hasRepeat = true;
+		}
+		items.push(...measures);
 	}
+	if (hasTechniques) ambiguities.push('techniques-approximated');
+	if (hasRepeat) ambiguities.push('repeat-detected');
 
 	const score: Score = {
 		metadata: { time: { numerator: 4, denominator: 4 }, capo: 0 },
@@ -76,7 +82,7 @@ export function parseAsciiTab(text: string): AsciiResult {
 				tuning: tuningInfo?.tuning ?? Array.from({ length: stringCount }, () => 'E2'),
 				frets: 24,
 				capo: 0,
-				sections: [{ label: 'tab', items: beats, location: zero() }],
+				sections: [{ label: 'tab', items, location: zero() }],
 				location: zero(),
 			},
 		],
@@ -84,26 +90,58 @@ export function parseAsciiTab(text: string): AsciiResult {
 
 	let confidence = 0.8;
 	if (!tuningInfo) confidence -= 0.2;
-	if (hasConnectors) confidence -= 0.1;
+	if (hasTechniques) confidence -= 0.1;
 	confidence = Math.max(0.1, Math.min(0.9, confidence));
 
 	return { score, fretdown: serialize(score), confidence, ambiguities };
 }
 
+interface TabBlock {
+	lines: string[];
+	/** Index in the original lines where this block starts (for finding a P.M. line above it). */
+	start: number;
+}
+
 /** Finds every group of consecutive tab lines (each a "system"); blank/prose lines separate. */
-function findTabBlocks(lines: string[]): string[][] {
-	const groups: string[][] = [];
+function findTabBlocks(lines: string[]): TabBlock[] {
+	const blocks: TabBlock[] = [];
 	let current: string[] = [];
-	const flush = () => {
-		if (current.length >= 2) groups.push(current);
+	let start = 0;
+	const flush = (end: number) => {
+		if (current.length >= 2) blocks.push({ lines: current, start: end - current.length });
 		current = [];
 	};
-	for (const line of lines) {
-		if (isTabLine(line)) current.push(line);
-		else flush();
+	lines.forEach((line, i) => {
+		if (isTabLine(line)) {
+			if (current.length === 0) start = i;
+			current.push(line);
+		} else {
+			flush(i);
+		}
+	});
+	flush(lines.length);
+	return blocks;
+}
+
+/** A line of palm-mute dots/PM markers above a system (e.g. "  .  .  .   .  ."). */
+function isPalmMuteLine(line: string): boolean {
+	return !isTabLine(line) && !/[0-9]/.test(line) && (line.match(/\./g)?.length ?? 0) >= 2;
+}
+
+/**
+ * Body columns marked by a palm-mute dots line just above a block, or [] if there isn't one.
+ * Dots are mapped from raw columns into the block's bar-relative body coordinates.
+ */
+function palmMuteColumns(lines: string[], blockStart: number, firstBar: number): number[] {
+	for (const above of [blockStart - 1, blockStart - 2]) {
+		const line = lines[above];
+		if (line === undefined) continue;
+		if (isPalmMuteLine(line)) {
+			return [...line.matchAll(/\./g)].map((m) => (m.index ?? 0) - firstBar).filter((c) => c >= 0);
+		}
+		if (line.trim() !== '') break; // a non-blank, non-PM line (e.g. a label) stops the search
 	}
-	flush();
-	return groups;
+	return [];
 }
 
 /** The most frequent value (used to pick the dominant string count across systems). */
@@ -158,6 +196,17 @@ function tokenizeLine(body: string): LineToken[] {
 			tokens.push({ col: start, fret: Number(num), connector });
 		} else if (ch === 'x' || ch === 'X') {
 			tokens.push({ col: i, fret: null, connector: null });
+		} else if (ch === '~' || CONNECTOR_CHARS.has(ch)) {
+			// A connector/`~` with no fret after it is a trailing modifier on the previous note
+			// (e.g. `12\` slide-off, `3b` bend, `3~` vibrato). If a digit follows, it's that
+			// note's leading connector instead, handled above.
+			const next = body[i + 1];
+			const followedByDigit = next !== undefined && next >= '0' && next <= '9';
+			const last = tokens[tokens.length - 1];
+			if (!followedByDigit && last) {
+				last.trailing ??= [];
+				last.trailing.push(ch);
+			}
 		}
 	}
 	return tokens;
@@ -211,11 +260,28 @@ interface Onset {
 	build: (duration: Duration) => Beat;
 }
 
+/** Turns trailing connectors/`~` into events + articulations on a note (e.g. `12\`, `3b`, `3~`). */
+function applyTrailing(note: Note, trailing: string[]): void {
+	const fret = note.fret ?? 0;
+	for (const m of trailing) {
+		if (m === '~') {
+			if (!note.articulations.includes('vib')) note.articulations.push('vib');
+		} else if (m === 'b') {
+			note.events.push({ connector: 'b', fret: fret + 2 }); // default a full bend up
+		} else if (m === '/') {
+			note.events.push({ connector: '/', fret: fret + 2 });
+		} else if (m === '\\') {
+			note.events.push({ connector: '\\', fret: Math.max(0, fret - 2) }); // slide off, downward
+		}
+	}
+}
+
 /** Turns one system's tokens into ordered onsets, inferring each note's length from spacing. */
-function systemEvents(perString: LineToken[][], stringCount: number): Onset[] {
+function systemEvents(perString: LineToken[][], stringCount: number, pmCols: number[]): Onset[] {
 	// Attach connector tokens to the previous note on the same string; collect notes by column.
 	const noteByStringCol = new Map<string, Note>();
 	const colSet = new Set<number>();
+	const isPalmMuted = (col: number) => pmCols.some((c) => Math.abs(c - col) <= 1);
 
 	perString.forEach((tokens, lineIdx) => {
 		const stringNumber = lineIdx + 1; // top line = string 1
@@ -223,6 +289,7 @@ function systemEvents(perString: LineToken[][], stringCount: number): Onset[] {
 		for (const t of tokens) {
 			if (t.connector && lastNote) {
 				lastNote.events.push({ connector: t.connector, fret: t.fret ?? 0 });
+				if (t.trailing) applyTrailing(lastNote, t.trailing);
 				continue;
 			}
 			const note: Note = {
@@ -230,9 +297,10 @@ function systemEvents(perString: LineToken[][], stringCount: number): Onset[] {
 				dead: t.fret === null,
 				fret: t.fret,
 				events: [],
-				articulations: [],
+				articulations: isPalmMuted(t.col) ? ['pm'] : [],
 				location: zero(),
 			};
+			if (t.trailing) applyTrailing(note, t.trailing);
 			noteByStringCol.set(`${t.col}:${stringNumber}`, note);
 			colSet.add(t.col);
 			lastNote = note;
